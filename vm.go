@@ -29,7 +29,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "fmt"
 import "math"
 import "math/big"
 import "math/bits"
@@ -95,7 +94,7 @@ func (vm *VM) Run(input_hash []byte) {
 
 	var mix_block [8]uint64
 
-	fmt.Printf("%x \n", input_hash)
+	//fmt.Printf("%x \n", input_hash)
 
 	fillAes4Rx4(input_hash[:], vm.buffer[:])
 
@@ -133,7 +132,7 @@ func (vm *VM) Run(input_hash []byte) {
 	vm.config.eMask[0] = getFloatMask(vm.entropy[14])
 	vm.config.eMask[1] = getFloatMask(vm.entropy[15])
 
-	fmt.Printf("prog %x  entropy 0 %x %f \n", vm.buffer[:32], vm.entropy[0], vm.reg.a[0][HIGH])
+	//fmt.Printf("prog %x  entropy 0 %x %f \n", vm.buffer[:32], vm.entropy[0], vm.reg.a[0][HIGH])
 
 	vm.Compile_TO_Bytecode()
 
@@ -267,7 +266,7 @@ func (vm *VM) CalculateHash(input []byte, output []byte) {
 		}
 
 		temp_hash = hash512.Sum(nil)
-		fmt.Printf("%d temphash %x\n", chain, temp_hash)
+		//fmt.Printf("%d temphash %x\n", chain, temp_hash)
 	}
 
 	// final loop executes here
@@ -306,20 +305,19 @@ func (vm *VM) CalculateHash(input []byte, output []byte) {
 
 	copy(output, final_hash)
 
-	fmt.Printf("final %x\n", final_hash)
+	//fmt.Printf("final %x\n", final_hash)
 }
 
 /*
-
-	const  mantissaSize = 52;
-	const  exponentSize = 11;
-	const  mantissaMask = ( (uint64(1)) << mantissaSize) - 1;
-	const  exponentMask = (uint64(1) << exponentSize) - 1;
-	const  exponentBias = 1023;
-	const  dynamicExponentBits = 4;
-	const  staticExponentBits = 4;
-	const  constExponentBits uint64= 0x300;
-	const  dynamicMantissaMask = ( uint64(1) << (mantissaSize + dynamicExponentBits)) - 1;
+const  mantissaSize = 52;
+const  exponentSize = 11;
+const  mantissaMask = ( (uint64(1)) << mantissaSize) - 1;
+const  exponentMask = (uint64(1) << exponentSize) - 1;
+const  exponentBias = 1023;
+const  dynamicExponentBits = 4;
+const  staticExponentBits = 4;
+const  constExponentBits uint64= 0x300;
+const  dynamicMantissaMask = ( uint64(1) << (mantissaSize + dynamicExponentBits)) - 1;
 */
 const mask22bit = (uint64(1) << 22) - 1
 

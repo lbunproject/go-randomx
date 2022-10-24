@@ -29,7 +29,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "fmt"
 import "encoding/binary"
 import "golang.org/x/crypto/blake2b"
 
@@ -37,53 +36,53 @@ import _ "unsafe"
 import _ "golang.org/x/crypto/argon2"
 
 // see reference configuration.h
-//Cache size in KiB. Must be a power of 2.
+// Cache size in KiB. Must be a power of 2.
 const RANDOMX_ARGON_MEMORY = 262144
 
-//Number of Argon2d iterations for Cache initialization.
+// Number of Argon2d iterations for Cache initialization.
 const RANDOMX_ARGON_ITERATIONS = 3
 
-//Number of parallel lanes for Cache initialization.
+// Number of parallel lanes for Cache initialization.
 const RANDOMX_ARGON_LANES = 1
 
-//Argon2d salt
+// Argon2d salt
 const RANDOMX_ARGON_SALT = "RandomX\x03"
 const ArgonSaltSize uint32 = 8 //sizeof("" RANDOMX_ARGON_SALT) - 1;
 
-//Number of random Cache accesses per Dataset item. Minimum is 2.
+// Number of random Cache accesses per Dataset item. Minimum is 2.
 const RANDOMX_CACHE_ACCESSES = 8
 
-//Target latency for SuperscalarHash (in cycles of the reference CPU).
+// Target latency for SuperscalarHash (in cycles of the reference CPU).
 const RANDOMX_SUPERSCALAR_LATENCY = 170
 
-//Dataset base size in bytes. Must be a power of 2.
+// Dataset base size in bytes. Must be a power of 2.
 const RANDOMX_DATASET_BASE_SIZE = 2147483648
 
-//Dataset extra size. Must be divisible by 64.
+// Dataset extra size. Must be divisible by 64.
 const RANDOMX_DATASET_EXTRA_SIZE = 33554368
 
-//Number of instructions in a RandomX program. Must be divisible by 8.
+// Number of instructions in a RandomX program. Must be divisible by 8.
 const RANDOMX_PROGRAM_SIZE = 256
 
-//Number of iterations during VM execution.
+// Number of iterations during VM execution.
 const RANDOMX_PROGRAM_ITERATIONS = 2048
 
-//Number of chained VM executions per hash.
+// Number of chained VM executions per hash.
 const RANDOMX_PROGRAM_COUNT = 8
 
-//Scratchpad L3 size in bytes. Must be a power of 2.
+// Scratchpad L3 size in bytes. Must be a power of 2.
 const RANDOMX_SCRATCHPAD_L3 = 2097152
 
-//Scratchpad L2 size in bytes. Must be a power of two and less than or equal to RANDOMX_SCRATCHPAD_L3.
+// Scratchpad L2 size in bytes. Must be a power of two and less than or equal to RANDOMX_SCRATCHPAD_L3.
 const RANDOMX_SCRATCHPAD_L2 = 262144
 
-//Scratchpad L1 size in bytes. Must be a power of two (minimum 64) and less than or equal to RANDOMX_SCRATCHPAD_L2.
+// Scratchpad L1 size in bytes. Must be a power of two (minimum 64) and less than or equal to RANDOMX_SCRATCHPAD_L2.
 const RANDOMX_SCRATCHPAD_L1 = 16384
 
-//Jump condition mask size in bits.
+// Jump condition mask size in bits.
 const RANDOMX_JUMP_BITS = 8
 
-//Jump condition mask offset in bits. The sum of RANDOMX_JUMP_BITS and RANDOMX_JUMP_OFFSET must not exceed 16.
+// Jump condition mask offset in bits. The sum of RANDOMX_JUMP_BITS and RANDOMX_JUMP_OFFSET must not exceed 16.
 const RANDOMX_JUMP_OFFSET = 8
 
 const DATASETEXTRAITEMS = RANDOMX_DATASET_EXTRA_SIZE / RANDOMX_DATASET_ITEM_SIZE
@@ -163,16 +162,16 @@ func (b *Blake2Generator) checkdata(bytesNeeded int) {
 func (b *Blake2Generator) GetByte() byte {
 	b.checkdata(1)
 	ret := b.data[b.dataindex]
-	fmt.Printf("returning byte %02x\n", ret)
+	//fmt.Printf("returning byte %02x\n", ret)
 	b.dataindex++
 	return ret
 }
 func (b *Blake2Generator) GetUint32() uint32 {
 	b.checkdata(4)
 	ret := uint32(binary.LittleEndian.Uint32(b.data[b.dataindex:]))
-	fmt.Printf("returning int32 %08x %08x\n", ret, binary.LittleEndian.Uint32(b.data[b.dataindex:]))
+	//fmt.Printf("returning int32 %08x %08x\n", ret, binary.LittleEndian.Uint32(b.data[b.dataindex:]))
 	b.dataindex += 4
-	fmt.Printf("returning int32 %08x\n", ret)
+	//fmt.Printf("returning int32 %08x\n", ret)
 
 	if ret == 0xc5dac17e {
 		// panic("exiting")
@@ -193,7 +192,7 @@ func Randomx_alloc_cache(flags uint64) *Randomx_Cache {
 }
 
 func (cache *Randomx_Cache) Randomx_init_cache(key []byte) {
-	fmt.Printf("appending null byte is not necessary but only done for testing")
+	//fmt.Printf("appending null byte is not necessary but only done for testing")
 	kkey := append([]byte{}, key...)
 	//kkey = append(kkey,0)
 	//cache->initialize(cache, key, keySize);

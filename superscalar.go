@@ -91,16 +91,16 @@ var M_Mov_rr = MacroOP{"mov r,r", 3, 0, Null, Null, false}
 // latency is 1 lower
 var M_Imul_r_dependent = MacroOP{"imul r", 3, 3, P1, Null, true} // this is the dependent version where current instruction depends on previous instruction
 
-//Size: 4 bytes
+// Size: 4 bytes
 var M_Lea_SIB = MacroOP{"lea r,r+r*s", 4, 1, P01, Null, false}
 var M_Imul_rr = MacroOP{"imul r,r", 4, 3, P1, Null, false}
 var M_Ror_ri = MacroOP{"ror r,i", 4, 1, P05, Null, false}
 
-//Size: 7 bytes (can be optionally padded with nop to 8 or 9 bytes)
+// Size: 7 bytes (can be optionally padded with nop to 8 or 9 bytes)
 var M_Add_ri = MacroOP{"add r,i", 7, 1, P015, Null, false}
 var M_Xor_ri = MacroOP{"xor r,i", 7, 1, P015, Null, false}
 
-//Size: 10 bytes
+// Size: 10 bytes
 var M_Mov_ri64 = MacroOP{"mov rax,i64", 10, 1, P015, Null, false}
 
 // unused are not implemented
@@ -378,35 +378,35 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 
 	switch ins.Name {
 	case ISUB_R.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 		sins.Imm32 = 0
 		sins.OpGroup = S_IADD_RS
 		sins.GroupParIsSource = 1
 	case IXOR_R.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 		sins.Imm32 = 0
 		sins.OpGroup = S_IXOR_R
 		sins.GroupParIsSource = 1
 	case IADD_RS.Name:
-		fmt.Printf("q %s \n", ins.Name)
+		//fmt.Printf("q %s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = gen.GetByte()
 		sins.Imm32 = 0
 		sins.OpGroup = S_IADD_RS
 		sins.GroupParIsSource = 1
 	case IMUL_R.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 		sins.Imm32 = 0
 		sins.OpGroup = S_IMUL_R
 		sins.GroupParIsSource = 1
 	case IROR_C.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 
@@ -417,14 +417,14 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		sins.OpGroup = S_IROR_C
 		sins.OpGroupPar = -1
 	case IADD_C7.Name, IADD_C8.Name, IADD_C9.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 		sins.Imm32 = gen.GetUint32()
 		sins.OpGroup = S_IADD_C7
 		sins.OpGroupPar = -1
 	case IXOR_C7.Name, IXOR_C8.Name, IXOR_C9.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = 0
 		sins.Imm32 = gen.GetUint32()
@@ -432,7 +432,7 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		sins.OpGroupPar = -1
 
 	case IMULH_R.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.CanReuse = true
 		sins.Mod = 0
@@ -440,7 +440,7 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		sins.OpGroup = S_IMULH_R
 		sins.OpGroupPar = int(gen.GetUint32())
 	case ISMULH_R.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.CanReuse = true
 		sins.Mod = 0
@@ -449,7 +449,7 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		sins.OpGroupPar = int(gen.GetUint32())
 
 	case IMUL_RCP.Name:
-		fmt.Printf("%s \n", ins.Name)
+		//fmt.Printf("%s \n", ins.Name)
 		sins.Name = ins.Name
 
 		sins.Mod = 0
@@ -471,7 +471,7 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 }
 func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Generator, instruction_len int, decoder_type int, islast, isfirst bool) {
 
-	fmt.Printf("instruction len %d\n", instruction_len)
+	//fmt.Printf("instruction len %d\n", instruction_len)
 	switch instruction_len {
 	case 3:
 		if islast {
@@ -490,7 +490,7 @@ func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Gener
 		create(sins, slot7[gen.GetByte()&1], gen)
 
 	case 8:
-		fmt.Printf("creating 8\n")
+		//fmt.Printf("creating 8\n")
 		create(sins, slot8[gen.GetByte()&1], gen)
 
 	case 9:
@@ -512,11 +512,11 @@ type SuperScalarProgram struct {
 func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	cycle := 0
 	depcycle := 0
-	retire_cycle := 0
+	//retire_cycle := 0
 	mulcount := 0
 	ports_saturated := false
 	program_size := 0
-	current_instruction := INOP
+	//current_instruction := INOP
 	macro_op_index := 0
 	macro_op_count := 0
 	throwAwayCount := 0
@@ -539,7 +539,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 
 		decoder := FetchNextDecoder(sins.ins, decode_cycle, mulcount, gen)
 
-		fmt.Printf("; ------------- fetch cycle %d  (%s)\n", cycle, decoder)
+		//fmt.Printf("; ------------- fetch cycle %d  (%s)\n", cycle, decoder)
 
 		if cycle == 51 {
 			//   break
@@ -556,7 +556,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 		for buffer_index < decoder.GetSize() { // generate instructions for the current decoder
 			top_cycle := cycle
 
-			fmt.Printf("macro_op_index %d current_instruction %s actual instruction uop %d\n", macro_op_index, current_instruction.Name, sins.ins.GetUOPCount())
+			//fmt.Printf("macro_op_index %d current_instruction %s actual instruction uop %d\n", macro_op_index, current_instruction.Name, sins.ins.GetUOPCount())
 
 			if macro_op_index >= sins.ins.GetUOPCount() {
 				if ports_saturated || program_size >= SuperscalarMaxSize {
@@ -575,23 +575,23 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 				mop = sins.ins.UOP_Array[macro_op_index]
 			}
 
-			fmt.Printf("MOP name %s depcycle %d\n", mop.Name, depcycle)
+			//fmt.Printf("MOP name %s depcycle %d\n", mop.Name, depcycle)
 
 			//calculate the earliest cycle when this macro-op (all of its uOPs) can be scheduled for execution
 			scheduleCycle := ScheduleMop(&mop, portbusy, cycle, depcycle, false)
 			if scheduleCycle < 0 {
-				fmt.Printf("Unable to map operation %s to execution port (cycle %d)", mop.Name, cycle)
+				//fmt.Printf("Unable to map operation %s to execution port (cycle %d)", mop.Name, cycle)
 				//__debugbreak();
 				ports_saturated = true
 				break
 			}
 
-			fmt.Printf("scheduleCycle %d\n", scheduleCycle)
+			//fmt.Printf("scheduleCycle %d\n", scheduleCycle)
 
 			if macro_op_index == sins.ins.SrcOP { // FIXME
 				forward := 0
 				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectSource(scheduleCycle, registers, gen); forward++ {
-					fmt.Printf(";src STALL at cycle %d\n", cycle)
+					//fmt.Printf(";src STALL at cycle %d\n", cycle)
 					scheduleCycle++
 					cycle++
 				}
@@ -600,21 +600,21 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 					if throwAwayCount < MAX_THROWAWAY_COUNT {
 						throwAwayCount++
 						macro_op_index = sins.ins.GetUOPCount()
-						fmt.Printf(";throwAway %s\n", sins.Name)
+						//fmt.Printf(";throwAway %s\n", sins.Name)
 						continue
 					}
-					fmt.Printf("aborting at cycle %d  source registers not available", cycle)
+					//fmt.Printf("aborting at cycle %d  source registers not available", cycle)
 					break
 				}
 
-				fmt.Printf("; src = r%d\n", sins.Src_Reg)
+				//fmt.Printf("; src = r%d\n", sins.Src_Reg)
 
 			}
 
 			if macro_op_index == sins.ins.DstOP { // FIXME
 				forward := 0
 				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectDestination(scheduleCycle, throwAwayCount > 0, registers, gen); forward++ {
-					fmt.Printf(";dst STALL at cycle %d\n", cycle)
+					//fmt.Printf(";dst STALL at cycle %d\n", cycle)
 					scheduleCycle++
 					cycle++
 				}
@@ -623,14 +623,14 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 					if throwAwayCount < MAX_THROWAWAY_COUNT {
 						throwAwayCount++
 						macro_op_index = sins.ins.GetUOPCount()
-						fmt.Printf(";throwAway %s\n", sins.Name)
+						//fmt.Printf(";throwAway %s\n", sins.Name)
 						continue
 					}
-					fmt.Printf("aborting at cycle %d  destination registers not available", cycle)
+					//fmt.Printf("aborting at cycle %d  destination registers not available", cycle)
 					break
 				}
 
-				fmt.Printf("; dst = r%d\n", sins.Dst_Reg)
+				//fmt.Printf("; dst = r%d\n", sins.Dst_Reg)
 
 			}
 			throwAwayCount = 0
@@ -640,8 +640,8 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 			depcycle = scheduleCycle + mop.GetLatency() // calculate when will the result be ready
 
 			if macro_op_index == sins.ins.ResultOP { // fix me
-				retire_cycle = depcycle
-				fmt.Printf("; RETIRED at cycle %d  Dst_Reg %d\n", retire_cycle, sins.Dst_Reg)
+				//retire_cycle = depcycle
+				//fmt.Printf("; RETIRED at cycle %d  Dst_Reg %d\n", retire_cycle, sins.Dst_Reg)
 				registers[sins.Dst_Reg].Latency = depcycle
 				registers[sins.Dst_Reg].LastOpGroup = sins.OpGroup
 				registers[sins.Dst_Reg].LastOpPar = sins.OpGroupPar
@@ -678,9 +678,12 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 		cycle++
 	}
 
-	for i := range program.Ins {
-		fmt.Printf("%d %s\n", i, program.Ins[i].String())
-	}
+	/*
+		for i := range program.Ins {
+			fmt.Printf("%d %s\n", i, program.Ins[i].String())
+		}
+
+	*/
 
 	var asic_latencies [8]int
 
@@ -698,7 +701,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	address_reg := 0
 
 	for i := range asic_latencies {
-		fmt.Printf("latency[%d] %d\n", i, asic_latencies[i])
+		//fmt.Printf("latency[%d] %d\n", i, asic_latencies[i])
 		if asic_latencies[i] > asic_latency_max {
 			asic_latency_max = asic_latencies[i]
 			address_reg = i
@@ -707,7 +710,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 
 	program.AddressReg = address_reg
 
-	fmt.Printf("address_reg %d\n", address_reg)
+	//fmt.Printf("address_reg %d\n", address_reg)
 
 	return &program
 
@@ -722,29 +725,29 @@ func ScheduleUop(uop ExecutionPort, portbusy [][]int, cycle int, commit bool) in
 	//cycle++
 	for ; cycle < CYCLE_MAP_SIZE; cycle++ { // since cycle is value based, its restored on return
 		//fmt.Printf("port busy %+v\n", portbusy[cycle])
-		fmt.Printf("current cycle %d portbusy %+v  commit %+v\n", cycle, portbusy[cycle], commit)
+		//fmt.Printf("current cycle %d portbusy %+v  commit %+v\n", cycle, portbusy[cycle], commit)
 		if (uop&P5) != 0 && portbusy[cycle][2] == 0 {
 			if commit {
-				fmt.Printf("; P5 at cycle %d\n", cycle)
+				//fmt.Printf("; P5 at cycle %d\n", cycle)
 				portbusy[cycle][2] = int(uop)
 			}
-			fmt.Printf("P5 available\n")
+			//fmt.Printf("P5 available\n")
 			return cycle
 		}
 		if (uop&P0) != 0 && portbusy[cycle][0] == 0 {
 			if commit {
-				fmt.Printf("; P0 at cycle %d\n", cycle)
+				//fmt.Printf("; P0 at cycle %d\n", cycle)
 				portbusy[cycle][0] = int(uop)
 			}
-			fmt.Printf("P0 available\n")
+			//fmt.Printf("P0 available\n")
 			return cycle
 		}
 		if (uop&P1) != 0 && portbusy[cycle][1] == 0 {
 			if commit {
-				fmt.Printf("; P1 at cycle %d\n", cycle)
+				//fmt.Printf("; P1 at cycle %d\n", cycle)
 				portbusy[cycle][1] = int(uop)
 			}
-			fmt.Printf("P1 available\n")
+			//fmt.Printf("P1 available\n")
 			return cycle
 		}
 
@@ -755,17 +758,17 @@ func ScheduleUop(uop ExecutionPort, portbusy [][]int, cycle int, commit bool) in
 func ScheduleMop(mop *MacroOP, portbusy [][]int, cycle int, depcycle int, commit bool) int {
 
 	if mop.IsDependent() {
-		fmt.Printf("dependent\n")
+		//fmt.Printf("dependent\n")
 		cycle = Max(cycle, depcycle)
 	}
 
 	if mop.IsEliminated() {
 		if commit {
-			fmt.Printf("; (eliminated)\n")
+			//fmt.Printf("; (eliminated)\n")
 		}
 		return cycle
 	} else if mop.IsSimple() {
-		fmt.Printf("simple 1\n")
+		//fmt.Printf("simple 1\n")
 
 		return ScheduleUop(mop.GetUOP1(), portbusy, cycle, commit)
 	} else {
@@ -812,10 +815,10 @@ func (sins *SuperScalarInstruction) SelectSource(cycle int, Registers []Register
 	var available_registers []int
 
 	for i := range Registers {
-		fmt.Printf("\nchecking s reg %d latency %d  cycle %d", i, Registers[i].Latency, cycle)
+		//fmt.Printf("\nchecking s reg %d latency %d  cycle %d", i, Registers[i].Latency, cycle)
 		if Registers[i].Latency <= cycle {
 			available_registers = append(available_registers, i)
-			fmt.Printf("available")
+			//fmt.Printf("available")
 		}
 	}
 
@@ -843,21 +846,21 @@ func (sins *SuperScalarInstruction) SelectDestination(cycle int, allowChainedMul
 	var available_registers []int
 
 	for i := range Registers {
-		fmt.Printf("\nchecking d reg %d  cycle %d CanReuse %+v src %d latency %d chained_mul %+v | ", i, cycle, sins.CanReuse, sins.Src_Reg, Registers[i].Latency, allowChainedMul)
-		fmt.Printf("%+v %+v %+v %+v %+v ", Registers[i].Latency <= cycle,
-			(sins.CanReuse || i != sins.Src_Reg),
-			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R),
-			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar),
-			(sins.Name != "IADD_RS" || i != RegisterNeedsDisplacement))
+		//fmt.Printf("\nchecking d reg %d  cycle %d CanReuse %+v src %d latency %d chained_mul %+v | ", i, cycle, sins.CanReuse, sins.Src_Reg, Registers[i].Latency, allowChainedMul)
+		/*fmt.Printf("%+v %+v %+v %+v %+v ", Registers[i].Latency <= cycle,
+		(sins.CanReuse || i != sins.Src_Reg),
+		(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R),
+		(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar),
+		(sins.Name != "IADD_RS" || i != RegisterNeedsDisplacement))*/
 		//fmt.Printf("qq %+v %+v %+v qq",allowChainedMul, sins.OpGroup != S_IMUL_R, Registers[i].LastOpGroup != S_IMUL_R )
-		fmt.Printf("yy %+v %+v  yy ", Registers[i].LastOpPar, sins.OpGroupPar)
+		//fmt.Printf("yy %+v %+v  yy ", Registers[i].LastOpPar, sins.OpGroupPar)
 
 		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src_Reg) &&
 			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R) &&
 			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar) &&
 			(sins.Name != "IADD_RS" || i != RegisterNeedsDisplacement) {
 			available_registers = append(available_registers, i)
-			fmt.Printf("available ")
+			//fmt.Printf("available ")
 		}
 	}
 
@@ -878,7 +881,7 @@ func selectRegister(available_registers []int, gen *Blake2Generator, reg *int) b
 	} else {
 		index = 0
 	}
-	fmt.Printf("reg index %d\n", index)
+	//fmt.Printf("reg index %d\n", index)
 	*reg = available_registers[index] // availableRegisters[index];
 	return true
 }
@@ -940,7 +943,7 @@ func (cache *Randomx_Cache) initDataset(start_item, end_item uint64) {
 		cache.InitDatasetItem(nil, itemnumber)
 
 		// dataset_index += CacheLineSize
-		fmt.Printf("exiting dataset item\n")
+		//fmt.Printf("exiting dataset item\n")
 		break
 
 	}

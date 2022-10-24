@@ -82,7 +82,7 @@ func hashAes1Rx4(input []byte, output []byte) {
 		binary.BigEndian.PutUint32(output[i:], states[i/16][(i%16)/4])
 	}
 
-	fmt.Printf("aes hash %x\n", output)
+	//fmt.Printf("aes hash %x\n", output)
 
 }
 
