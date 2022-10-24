@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 /*
 Copyright (c) 2019 DERO Foundation. All rights reserved.
 
@@ -27,11 +30,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-//+build ignore
-
 package main
 
-import "randomx"
+import "git.gammaspectra.live/P2Pool/go-randomx"
 import "fmt"
 
 func main() {
