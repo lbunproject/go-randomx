@@ -65,6 +65,22 @@ type VM struct {
 
 }
 
+func SubnormalsToZero(f float64, _ ...any) float64 {
+	//FTZ/DAZ subnormals to zero
+	fbits := math.Float64bits(f)
+	if fbits >= 0x0000000000000001 && fbits <= 0x000fffffffffffff {
+		return 0.
+	} else if fbits >= 0x8000000000000001 && fbits <= 0x800fffffffffffff {
+		return -0.
+	}
+
+	return f
+}
+
+func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
+	return SubnormalsToZero(math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode))
+}
+
 func (cache *Randomx_Cache) VM_Initialize() *VM {
 
 	return &VM{Cache: cache, RoundingMode: big.ToNearestEven, fresult: &big.Float{}, fdst: &big.Float{}, fsrc: &big.Float{}} //// setup the cache
@@ -155,19 +171,19 @@ func (vm *VM) Run(input_hash []byte) {
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
-			vm.reg.f[i][LOW] = float64(unsigned32ToSigned2sCompl(vm.Load32(spAddr1 + 8*i)))
-			vm.reg.f[i][HIGH] = float64(unsigned32ToSigned2sCompl(vm.Load32(spAddr1 + 8*i + 4)))
+			vm.reg.f[i][LOW] = vm.Load32F(spAddr1 + 8*i)
+			vm.reg.f[i][HIGH] = vm.Load32F(spAddr1 + 8*i + 4)
 			//fmt.Printf("lo %f %f\n", vm.reg.f[i][LOW] , vm.reg.f[i][HIGH]  )
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
-			vm.reg.e[i][LOW] = float64(unsigned32ToSigned2sCompl(vm.Load32(spAddr1 + 8*(i+REGISTERCOUNTFLT))))
-			vm.reg.e[i][HIGH] = float64(unsigned32ToSigned2sCompl(vm.Load32(spAddr1 + 8*(i+REGISTERCOUNTFLT) + 4)))
+			vm.reg.e[i][LOW] = vm.Load32F(spAddr1 + 8*(i+REGISTERCOUNTFLT))
+			vm.reg.e[i][HIGH] = vm.Load32F(spAddr1 + 8*(i+REGISTERCOUNTFLT) + 4)
 
 			//	fmt.Printf("OR  %x %x\n", (math.Float64bits(vm.reg.e[i][LOW]) & dynamicMantissaMask) |  vm.config.eMask[LOW] , (math.Float64bits(vm.reg.e[i][HIGH]) & dynamicMantissaMask)| vm.config.eMask[HIGH]  )
 
-			vm.reg.e[i][LOW] = math.Float64frombits((math.Float64bits(vm.reg.e[i][LOW]) & dynamicMantissaMask) | vm.config.eMask[LOW])
-			vm.reg.e[i][HIGH] = math.Float64frombits((math.Float64bits(vm.reg.e[i][HIGH]) & dynamicMantissaMask) | vm.config.eMask[HIGH])
+			vm.reg.e[i][LOW] = MaskRegisterExponentMantissa(vm.reg.e[i][LOW], vm.config.eMask[LOW])
+			vm.reg.e[i][HIGH] = MaskRegisterExponentMantissa(vm.reg.e[i][HIGH], vm.config.eMask[HIGH])
 
 			//fmt.Printf("lo e %f %f\n", vm.reg.e[i][LOW] , vm.reg.e[i][HIGH]  )
 		}

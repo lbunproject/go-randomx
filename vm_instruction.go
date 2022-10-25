@@ -534,8 +534,6 @@ type InstructionByteCode struct {
 	target     int16
 	shift      uint16
 	memMask    uint32
-
-	RoundingMode big.RoundingMode
 	/*
 		union {
 			int_reg_t* idst;
@@ -571,28 +569,8 @@ func (vm *VM) Load32(addr uint64) uint32 {
 	return binary.BigEndian.Uint32(vm.ScratchPad[addr:])
 }
 
-func unsigned32ToSigned2sCompl(x uint32) int32 {
-	if -1 == (^0) {
-		return int32(x)
-	} else {
-		if x > math.MaxInt32 {
-			return (-(int32(math.MaxUint32-x) - 1))
-		} else {
-			return int32(x)
-		}
-	}
-}
-
-func unsigned64ToSigned2sCompl(x uint64) int64 {
-	if -1 == (^0) {
-		return int64(x)
-	} else {
-		if x > math.MaxInt64 {
-			return (-(int64(math.MaxUint64-x) - 1))
-		} else {
-			return int64(x)
-		}
-	}
+func (vm *VM) Load32F(addr uint64) float64 {
+	return SubnormalsToZero(float64(int32(vm.Load32(addr))))
 }
 
 func (vm *VM) InterpretByteCode() {
@@ -641,11 +619,11 @@ func (vm *VM) InterpretByteCode() {
 			// fmt.Printf("%x \n",*ibc.idst )
 			// panic("VM_IMULH_M")
 		case VM_ISMULH_R:
-			*ibc.idst = uint64(smulh(unsigned64ToSigned2sCompl(*ibc.idst), unsigned64ToSigned2sCompl(*ibc.isrc)))
+			*ibc.idst = uint64(smulh(int64(*ibc.idst), int64(*ibc.isrc)))
 			// fmt.Printf("dst %x\n", *ibc.idst)
 			// panic("VM_ISMULH_R")
 		case VM_ISMULH_M:
-			*ibc.idst = uint64(smulh(unsigned64ToSigned2sCompl(*ibc.idst), unsigned64ToSigned2sCompl(vm.Load64(ibc.getScratchpadAddress()))))
+			*ibc.idst = uint64(smulh(int64(*ibc.idst), int64(vm.Load64(ibc.getScratchpadAddress()))))
 			//fmt.Printf("%x \n",*ibc.idst )
 			// panic("VM_ISMULH_M")
 		case VM_INEG_R:
@@ -673,7 +651,7 @@ func (vm *VM) InterpretByteCode() {
 			//panic("VM_ISWAP_R")
 		case VM_FSWAP_R:
 
-			ibc.fdst[HIGH], ibc.fdst[LOW] = ibc.fdst[LOW], ibc.fdst[HIGH]
+			ibc.fdst[HIGH], ibc.fdst[LOW] = SubnormalsToZero(ibc.fdst[LOW]), SubnormalsToZero(ibc.fdst[HIGH])
 		//	fmt.Printf("%+v \n",ibc.fdst )
 		//	panic("VM_FSWAP_R")
 		case VM_FADD_R:
@@ -682,19 +660,22 @@ func (vm *VM) InterpretByteCode() {
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[LOW])
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[LOW]))
 			vm.fresult.Add(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[HIGH])
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[HIGH]))
 			vm.fresult.Add(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
+
+			//ibc.fdst[LOW] = ApplyRoundingMode(ibc.fdst[LOW]+ibc.fsrc[LOW], vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(ibc.fdst[HIGH]+ibc.fsrc[HIGH], vm.RoundingMode)
 
 			//panic("VM_FADD_R")
 		case VM_FADD_M:
@@ -703,19 +684,22 @@ func (vm *VM) InterpretByteCode() {
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 0))))
+			vm.fsrc.SetFloat64(vm.Load32F(ibc.getScratchpadAddress() + 0))
 			vm.fresult.Add(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 4))))
+			vm.fsrc.SetFloat64(vm.Load32F(ibc.getScratchpadAddress() + 4))
 			vm.fresult.Add(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
+
+			//ibc.fdst[LOW] = ApplyRoundingMode(ibc.fdst[LOW]+vm.Load32F(ibc.getScratchpadAddress()+0), vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(ibc.fdst[HIGH]+vm.Load32F(ibc.getScratchpadAddress()+4), vm.RoundingMode)
 
 			//panic("VM_FADD_M")
 		case VM_FSUB_R:
@@ -725,19 +709,22 @@ func (vm *VM) InterpretByteCode() {
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[LOW])
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[LOW]))
 			vm.fresult.Sub(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[HIGH])
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[HIGH]))
 			vm.fresult.Sub(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
+
+			//ibc.fdst[LOW] = ApplyRoundingMode(ibc.fdst[LOW]-ibc.fsrc[LOW], vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(ibc.fdst[HIGH]-ibc.fsrc[HIGH], vm.RoundingMode)
 
 			//fmt.Printf("fdst float %+v\n", ibc.fdst  )
 			//panic("VM_FSUB_R")
@@ -747,75 +734,73 @@ func (vm *VM) InterpretByteCode() {
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 0))))
+			vm.fsrc.SetFloat64(vm.Load32F(ibc.getScratchpadAddress() + 0))
 			vm.fresult.Sub(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 4))))
+			vm.fsrc.SetFloat64(vm.Load32F(ibc.getScratchpadAddress() + 4))
 			vm.fresult.Sub(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
+
+			//ibc.fdst[LOW] = ApplyRoundingMode(ibc.fdst[LOW]-vm.Load32F(ibc.getScratchpadAddress()+0), vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(ibc.fdst[HIGH]-vm.Load32F(ibc.getScratchpadAddress()+4), vm.RoundingMode)
 
 			//panic("VM_FSUB_M")
 		case VM_FSCAL_R: // no dependent on rounding modes
 			//mask := math.Float64frombits(0x80F0000000000000)
-			ibc.fdst[LOW] = math.Float64frombits(math.Float64bits(ibc.fdst[LOW]) ^ 0x80F0000000000000)
-			ibc.fdst[HIGH] = math.Float64frombits(math.Float64bits(ibc.fdst[HIGH]) ^ 0x80F0000000000000)
+			ibc.fdst[LOW] = SubnormalsToZero(math.Float64frombits(math.Float64bits(SubnormalsToZero(ibc.fdst[LOW])) ^ 0x80F0000000000000))
+			ibc.fdst[HIGH] = SubnormalsToZero(math.Float64frombits(math.Float64bits(SubnormalsToZero(ibc.fdst[HIGH])) ^ 0x80F0000000000000))
 
 			//fmt.Printf("fdst float %+v\n", ibc.fdst  )
 			//panic("VM_FSCA_M")
 		case VM_FMUL_R:
 
-			//	ibc.fdst[LOW] *= ibc.fsrc[LOW]
-			//	ibc.fdst[HIGH] *= ibc.fsrc[HIGH]
+			vm.fresult.SetMode(vm.RoundingMode)
+			vm.fdst.SetPrec(0)
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
+			vm.fsrc.SetPrec(0)
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[LOW]))
+			vm.fresult.Mul(vm.fdst, vm.fsrc)
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[LOW])
+			vm.fsrc.SetFloat64(SubnormalsToZero(ibc.fsrc[HIGH]))
 			vm.fresult.Mul(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
-
-			vm.fresult.SetMode(vm.RoundingMode)
-			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
-			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(ibc.fsrc[HIGH])
-			vm.fresult.Mul(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
 
 			//panic("VM_FMUK_M")
 		case VM_FDIV_M:
-			lo := float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 0)))
-			high := float64(unsigned32ToSigned2sCompl(vm.Load32(ibc.getScratchpadAddress() + 4)))
 
-			lo = math.Float64frombits((math.Float64bits(lo) & dynamicMantissaMask) | vm.config.eMask[LOW])
-			high = math.Float64frombits((math.Float64bits(high) & dynamicMantissaMask) | vm.config.eMask[HIGH])
+			//ibc.fdst[LOW] = ApplyRoundingMode(ibc.fdst[LOW]/MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+0), vm.config.eMask[LOW]), vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(ibc.fdst[HIGH]/MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+4), vm.config.eMask[HIGH]), vm.RoundingMode)
 
 			//ibc.fdst[LOW] /= lo
 			//ibc.fdst[HIGH] /= high
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(lo)
+			vm.fsrc.SetFloat64(MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+0), vm.config.eMask[LOW]))
 			vm.fresult.Quo(vm.fdst, vm.fsrc)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fsrc.SetPrec(0)
-			vm.fsrc.SetFloat64(high)
+			vm.fsrc.SetFloat64(MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+4), vm.config.eMask[HIGH]))
 			vm.fresult.Quo(vm.fdst, vm.fsrc)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
 
 			//panic("VM_FDIV_M")
 		case VM_FSQRT_R:
@@ -824,17 +809,20 @@ func (vm *VM) InterpretByteCode() {
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[LOW])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[LOW]))
 			vm.fdst.SetMode(vm.RoundingMode)
 			vm.fresult.Sqrt(vm.fdst)
-			ibc.fdst[LOW], _ = vm.fresult.Float64()
+			ibc.fdst[LOW] = SubnormalsToZero(vm.fresult.Float64())
 
 			vm.fresult.SetMode(vm.RoundingMode)
 			vm.fdst.SetPrec(0)
-			vm.fdst.SetFloat64(ibc.fdst[HIGH])
+			vm.fdst.SetFloat64(SubnormalsToZero(ibc.fdst[HIGH]))
 			vm.fdst.SetMode(vm.RoundingMode)
 			vm.fresult.Sqrt(vm.fdst)
-			ibc.fdst[HIGH], _ = vm.fresult.Float64()
+			ibc.fdst[HIGH] = SubnormalsToZero(vm.fresult.Float64())
+
+			//ibc.fdst[LOW] = ApplyRoundingMode(math.Sqrt(ibc.fdst[LOW]), vm.RoundingMode)
+			//ibc.fdst[HIGH] = ApplyRoundingMode(math.Sqrt(ibc.fdst[HIGH]), vm.RoundingMode)
 
 			// panic("VM_FSQRT")
 		case VM_CBRANCH:
