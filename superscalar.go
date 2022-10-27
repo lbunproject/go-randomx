@@ -951,7 +951,8 @@ func (cache *Randomx_Cache) initDataset(start_item, end_item uint64) {
 
 // execute the superscalar program
 func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
-	for _, ins := range p.Ins {
+	for i := range p.Ins {
+		ins := &p.Ins[i]
 		//fmt.Printf("%d %s\n",i ,program[i].String() )
 		switch ins.Opcode {
 		case S_ISUB_R:
@@ -1003,11 +1004,11 @@ func randomx_reciprocal(divisor uint64) uint64 {
 	quotient := p2exp63 / divisor
 	remainder := p2exp63 % divisor
 
-	bsr := 0
-	for bit := divisor; bit > 0; bit = bit >> 1 {
+	bsr := uint32(0)
+	for bit := divisor; bit > 0; bit >>= 1 {
 		bsr++
 	}
-	for shift := 0; shift < bsr; shift++ {
+	for shift := uint32(0); shift < bsr; shift++ {
 		if remainder >= divisor-remainder {
 			quotient = quotient*2 + 1
 			remainder = remainder*2 - divisor
