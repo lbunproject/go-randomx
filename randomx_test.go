@@ -50,22 +50,24 @@ func Test_Randomx(t *testing.T) {
 
 	for ix, tt := range Tests {
 
-		c.Randomx_init_cache(tt.key)
+		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
+			c.Randomx_init_cache(tt.key)
 
-		nonce := uint32(0) //uint32(len(key))
-		gen := Init_Blake2Generator(tt.key, nonce)
-		for i := 0; i < 8; i++ {
-			c.Programs[i] = Build_SuperScalar_Program(gen) // build a superscalar program
-		}
-		vm := c.VM_Initialize()
+			nonce := uint32(0) //uint32(len(key))
+			gen := Init_Blake2Generator(tt.key, nonce)
+			for i := 0; i < 8; i++ {
+				c.Programs[i] = Build_SuperScalar_Program(gen) // build a superscalar program
+			}
+			vm := c.VM_Initialize()
 
-		var output_hash [32]byte
-		vm.CalculateHash(tt.input, output_hash[:])
+			var output_hash [32]byte
+			vm.CalculateHash(tt.input, output_hash[:])
 
-		actual := fmt.Sprintf("%x", output_hash)
-		if actual != tt.expected {
-			t.Errorf("#%d Fib(%d): expected %s, actual %s", ix, tt.key, tt.expected, actual)
-		}
+			actual := fmt.Sprintf("%x", output_hash)
+			if actual != tt.expected {
+				t.Errorf("#%d Fib(%v): expected %s, actual %s", ix, tt.key, tt.expected, actual)
+			}
+		})
 	}
 
 }

@@ -29,8 +29,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "math"
-import "math/big"
+import (
+	"git.gammaspectra.live/P2Pool/go-randomx/fpu"
+	"math"
+	"runtime"
+)
 import "math/bits"
 import "encoding/binary"
 import "golang.org/x/crypto/blake2b"
@@ -57,10 +60,6 @@ type VM struct {
 	config        Config // configuration
 	datasetOffset uint64
 
-	RoundingMode big.RoundingMode
-
-	fresult, fdst, fsrc *big.Float
-
 	Cache *Randomx_Cache // randomx cache
 
 }
@@ -78,12 +77,12 @@ func SubnormalsToZero(f float64, _ ...any) float64 {
 }
 
 func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
-	return SubnormalsToZero(math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode))
+	return math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode)
 }
 
 func (cache *Randomx_Cache) VM_Initialize() *VM {
 
-	return &VM{Cache: cache, RoundingMode: big.ToNearestEven, fresult: &big.Float{}, fdst: &big.Float{}, fsrc: &big.Float{}} //// setup the cache
+	return &VM{Cache: cache} //// setup the cache
 }
 
 type Config struct {
@@ -240,7 +239,14 @@ func (vm *VM) Run(input_hash []byte) {
 func (vm *VM) CalculateHash(input []byte, output []byte) {
 	var buf [8]byte
 
-	vm.RoundingMode = big.ToNearestEven // reset rounding mode if new hash eing calculated
+	// Lock thread due to rounding mode flags
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	//restore rounding mode to golang expected one
+	defer fpu.SetRoundingMode(fpu.RoundingModeToNearest)
+
+	// reset rounding mode if new hash being calculated
+	fpu.SetRoundingMode(fpu.RoundingModeToNearest)
 
 	input_hash := blake2b.Sum512(input)
 
