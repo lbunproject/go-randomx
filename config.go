@@ -132,8 +132,10 @@ func isZeroOrPowerOf2(x uint64) bool {
 }
 
 type Blake2Generator struct {
-	data      [64]byte
-	dataindex int
+	data           [64]byte
+	dataindex      int
+	allocRegIndex  [8]int
+	allocRegisters [8]Register
 }
 
 func Init_Blake2Generator(key []byte, nonce uint32) *Blake2Generator {

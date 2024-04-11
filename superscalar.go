@@ -523,7 +523,11 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	code_size := 0
 	var program SuperScalarProgram
 
-	registers := make([]Register, 8, 8)
+	preAllocatedRegisters := gen.allocRegIndex[:]
+	clear(preAllocatedRegisters)
+
+	registers := gen.allocRegisters[:]
+	clear(registers)
 
 	sins := &SuperScalarInstruction{}
 	sins.ins = &Instruction{Name: "NOP"}
@@ -590,7 +594,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 
 			if macro_op_index == sins.ins.SrcOP { // FIXME
 				forward := 0
-				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectSource(scheduleCycle, registers, gen); forward++ {
+				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectSource(preAllocatedRegisters, scheduleCycle, registers, gen); forward++ {
 					//fmt.Printf(";src STALL at cycle %d\n", cycle)
 					scheduleCycle++
 					cycle++
@@ -613,7 +617,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 
 			if macro_op_index == sins.ins.DstOP { // FIXME
 				forward := 0
-				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectDestination(scheduleCycle, throwAwayCount > 0, registers, gen); forward++ {
+				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectDestination(preAllocatedRegisters, scheduleCycle, throwAwayCount > 0, registers, gen); forward++ {
 					//fmt.Printf(";dst STALL at cycle %d\n", cycle)
 					scheduleCycle++
 					cycle++
@@ -811,8 +815,8 @@ type Register struct {
 const RegisterNeedsDisplacement = 5
 const RegisterNeedsSib = 4
 
-func (sins *SuperScalarInstruction) SelectSource(cycle int, Registers []Register, gen *Blake2Generator) bool {
-	var available_registers []int
+func (sins *SuperScalarInstruction) SelectSource(preAllocatedAvailableRegisters []int, cycle int, Registers []Register, gen *Blake2Generator) bool {
+	available_registers := preAllocatedAvailableRegisters[:0]
 
 	for i := range Registers {
 		//fmt.Printf("\nchecking s reg %d latency %d  cycle %d", i, Registers[i].Latency, cycle)
@@ -842,29 +846,19 @@ func (sins *SuperScalarInstruction) SelectSource(cycle int, Registers []Register
 	return false
 }
 
-func (sins *SuperScalarInstruction) SelectDestination(cycle int, allowChainedMul bool, Registers []Register, gen *Blake2Generator) bool {
-	var available_registers []int
+func (sins *SuperScalarInstruction) SelectDestination(preAllocatedAvailableRegisters []int, cycle int, allowChainedMul bool, Registers []Register, gen *Blake2Generator) bool {
+	preAllocatedAvailableRegisters = preAllocatedAvailableRegisters[:0]
 
 	for i := range Registers {
-		//fmt.Printf("\nchecking d reg %d  cycle %d CanReuse %+v src %d latency %d chained_mul %+v | ", i, cycle, sins.CanReuse, sins.Src_Reg, Registers[i].Latency, allowChainedMul)
-		/*fmt.Printf("%+v %+v %+v %+v %+v ", Registers[i].Latency <= cycle,
-		(sins.CanReuse || i != sins.Src_Reg),
-		(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R),
-		(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar),
-		(sins.Name != "IADD_RS" || i != RegisterNeedsDisplacement))*/
-		//fmt.Printf("qq %+v %+v %+v qq",allowChainedMul, sins.OpGroup != S_IMUL_R, Registers[i].LastOpGroup != S_IMUL_R )
-		//fmt.Printf("yy %+v %+v  yy ", Registers[i].LastOpPar, sins.OpGroupPar)
-
 		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src_Reg) &&
 			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R) &&
 			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar) &&
-			(sins.Name != "IADD_RS" || i != RegisterNeedsDisplacement) {
-			available_registers = append(available_registers, i)
-			//fmt.Printf("available ")
+			(sins.Opcode != S_IADD_RS || i != RegisterNeedsDisplacement) {
+			preAllocatedAvailableRegisters = append(preAllocatedAvailableRegisters, i)
 		}
 	}
 
-	return selectRegister(available_registers, gen, &sins.Dst_Reg)
+	return selectRegister(preAllocatedAvailableRegisters, gen, &sins.Dst_Reg)
 }
 
 func selectRegister(available_registers []int, gen *Blake2Generator, reg *int) bool {
