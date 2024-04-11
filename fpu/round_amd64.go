@@ -4,9 +4,13 @@
 package fpu
 
 // stmxcsr reads the MXCSR control and status register.
+//
+//go:noescape
 func stmxcsr(addr *uint32)
 
 // ldmxcsr writes to the MXCSR control and status register.
+//
+//go:noescape
 func ldmxcsr(addr *uint32)
 
 func setRoundingMode(mode uint8) {
