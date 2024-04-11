@@ -54,7 +54,7 @@ func Test_Randomx(t *testing.T) {
 	for ix, tt := range Tests {
 
 		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
-			c.Randomx_init_cache(tt.key)
+			c.Init(tt.key)
 
 			nonce := uint32(0) //uint32(len(key))
 			gen := Init_Blake2Generator(tt.key, nonce)
@@ -82,7 +82,7 @@ func Benchmark_RandomX(b *testing.B) {
 
 	c := Randomx_alloc_cache(0)
 
-	c.Randomx_init_cache(tt.key)
+	c.Init(tt.key)
 
 	nonce := uint32(0) //uint32(len(key))
 	gen := Init_Blake2Generator(tt.key, nonce)

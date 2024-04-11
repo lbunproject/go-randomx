@@ -1,7 +1,19 @@
 package randomx
 
+import (
+	"slices"
+	"unsafe"
+)
+
+type MemoryBlock [128]uint64
+
+func (m MemoryBlock) getLine(addr uint64) []uint64 {
+	addr >>= 3
+	return m[addr : addr+8]
+}
+
 type Randomx_Cache struct {
-	Blocks []block
+	Blocks []MemoryBlock
 
 	Programs [RANDOMX_PROGRAM_COUNT]*SuperScalarProgram
 }
@@ -19,16 +31,19 @@ func (cache *Randomx_Cache) VM_Initialize() *VM {
 	}
 }
 
-func (cache *Randomx_Cache) Randomx_init_cache(key []byte) {
+func (cache *Randomx_Cache) Init(key []byte) {
 	//fmt.Printf("appending null byte is not necessary but only done for testing")
 	kkey := append([]byte{}, key...)
 	//kkey = append(kkey,0)
 	//cache->initialize(cache, key, keySize);
-	cache.Blocks = buildBlocks(argon2d, kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
+	argonBlocks := argon2_buildBlocks(kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
 
+	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argonBlock{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))
+
+	cache.Blocks = slices.Clone(memoryBlocks)
 }
 
-// fetch a 64 byte block in uint64 form
+// GetMixBlock fetch a 64 byte block in uint64 form
 func (cache *Randomx_Cache) GetMixBlock(addr uint64) []uint64 {
 
 	mask := CacheSize/CacheLineSize - 1
@@ -36,12 +51,10 @@ func (cache *Randomx_Cache) GetMixBlock(addr uint64) []uint64 {
 	addr = (addr & mask) * CacheLineSize
 
 	block := addr / 1024
-	index_within_block := (addr % 1024) / 8
-
-	return cache.Blocks[block][index_within_block : index_within_block+8]
+	return cache.Blocks[block].getLine(addr % 1024)
 }
 
-func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemnumber uint64) {
+func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemNumber uint64) {
 	const superscalarMul0 uint64 = 6364136223846793005
 	const superscalarAdd1 uint64 = 9298411001130361340
 	const superscalarAdd2 uint64 = 12065312585734608966
@@ -53,10 +66,10 @@ func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemnumber uint64
 
 	var rl registerLine
 
-	register_value := itemnumber
+	register_value := itemNumber
 	_ = register_value
 
-	rl[0] = (itemnumber + 1) * superscalarMul0
+	rl[0] = (itemNumber + 1) * superscalarMul0
 	rl[1] = rl[0] ^ superscalarAdd1
 	rl[2] = rl[0] ^ superscalarAdd2
 	rl[3] = rl[0] ^ superscalarAdd3
@@ -85,14 +98,8 @@ func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemnumber uint64
 	}
 }
 
-func (cache *Randomx_Cache) initDataset(start_item, end_item uint64) {
-	for itemnumber := start_item; itemnumber < end_item; itemnumber++ {
-
-		cache.InitDatasetItem(nil, itemnumber)
-
-		// dataset_index += CacheLineSize
-		//fmt.Printf("exiting dataset item\n")
-		break
-
+func (cache *Randomx_Cache) initDataset(dataset []registerLine, startItem, endItem uint64) {
+	for itemNumber := startItem; itemNumber < endItem; itemNumber, dataset = itemNumber+1, dataset[1:] {
+		cache.InitDatasetItem(&dataset[0], itemNumber)
 	}
 }

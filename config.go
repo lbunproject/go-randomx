@@ -29,26 +29,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "encoding/binary"
-import "golang.org/x/crypto/blake2b"
-
-import _ "unsafe"
-import _ "golang.org/x/crypto/argon2"
-
-// see reference configuration.h
-// Cache size in KiB. Must be a power of 2.
-const RANDOMX_ARGON_MEMORY = 262144
-
-// Number of Argon2d iterations for Cache initialization.
-const RANDOMX_ARGON_ITERATIONS = 3
-
-// Number of parallel lanes for Cache initialization.
-const RANDOMX_ARGON_LANES = 1
-
-// Argon2d salt
-const RANDOMX_ARGON_SALT = "RandomX\x03"
-const ArgonSaltSize uint32 = 8 //sizeof("" RANDOMX_ARGON_SALT) - 1;
-
 // Number of random Cache accesses per Dataset item. Minimum is 2.
 const RANDOMX_CACHE_ACCESSES = 8
 
@@ -87,7 +67,6 @@ const RANDOMX_JUMP_OFFSET = 8
 
 const DATASETEXTRAITEMS = RANDOMX_DATASET_EXTRA_SIZE / RANDOMX_DATASET_ITEM_SIZE
 
-const ArgonBlockSize uint32 = 1024
 const SuperscalarMaxSize int = 3*RANDOMX_SUPERSCALAR_LATENCY + 2
 const RANDOMX_DATASET_ITEM_SIZE uint64 = 64
 const CacheLineSize uint64 = RANDOMX_DATASET_ITEM_SIZE
@@ -129,95 +108,4 @@ const RANDOMX_FLAG_LARGE_PAGES = 2
 
 func isZeroOrPowerOf2(x uint32) bool {
 	return (x & (x - 1)) == 0
-}
-
-type Blake2Generator struct {
-	data           [64]byte
-	dataindex      int
-	allocRegIndex  [8]int
-	allocRegisters [8]Register
-}
-
-func Init_Blake2Generator(key []byte, nonce uint32) *Blake2Generator {
-	var b Blake2Generator
-	b.dataindex = len(b.data)
-	if len(key) > 60 {
-		copy(b.data[:], key[0:60])
-	} else {
-		copy(b.data[:], key)
-	}
-	binary.LittleEndian.PutUint32(b.data[60:], nonce)
-
-	return &b
-}
-
-func (b *Blake2Generator) checkdata(bytesNeeded int) {
-	if b.dataindex+bytesNeeded > cap(b.data) {
-		//blake2b(data, sizeof(data), data, sizeof(data), nullptr, 0);
-		h := blake2b.Sum512(b.data[:])
-		copy(b.data[:], h[:])
-		b.dataindex = 0
-	}
-
-}
-
-func (b *Blake2Generator) GetByte() byte {
-	b.checkdata(1)
-	ret := b.data[b.dataindex]
-	//fmt.Printf("returning byte %02x\n", ret)
-	b.dataindex++
-	return ret
-}
-func (b *Blake2Generator) GetUint32() uint32 {
-	b.checkdata(4)
-	ret := uint32(binary.LittleEndian.Uint32(b.data[b.dataindex:]))
-	//fmt.Printf("returning int32 %08x %08x\n", ret, binary.LittleEndian.Uint32(b.data[b.dataindex:]))
-	b.dataindex += 4
-	//fmt.Printf("returning int32 %08x\n", ret)
-
-	if ret == 0xc5dac17e {
-		// panic("exiting")
-	}
-
-	return ret
-}
-
-// some constants for argon
-const (
-	argon2d = iota
-	argon2i
-	argon2id
-)
-
-type block [128]uint64
-
-const syncPoints = 4
-
-//go:linkname argon2_initHash golang.org/x/crypto/argon2.initHash
-func argon2_initHash(password, salt, key, data []byte, time, memory, threads, keyLen uint32, mode int) [blake2b.Size + 8]byte
-
-//go:linkname argon2_initBlocks golang.org/x/crypto/argon2.initBlocks
-func argon2_initBlocks(h0 *[blake2b.Size + 8]byte, memory, threads uint32) []block
-
-//go:linkname argon2_processBlocks golang.org/x/crypto/argon2.processBlocks
-func argon2_processBlocks(B []block, time, memory, threads uint32, mode int)
-
-func buildBlocks(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []block {
-	if time < 1 {
-		panic("argon2: number of rounds too small")
-	}
-	if threads < 1 {
-		panic("argon2: parallelism degree too low")
-	}
-	h0 := argon2_initHash(password, salt, secret, data, time, memory, uint32(threads), keyLen, mode)
-
-	memory = memory / (syncPoints * uint32(threads)) * (syncPoints * uint32(threads))
-	if memory < 2*syncPoints*uint32(threads) {
-		memory = 2 * syncPoints * uint32(threads)
-	}
-	B := argon2_initBlocks(&h0, memory, uint32(threads))
-	argon2_processBlocks(B, time, memory, uint32(threads), mode)
-
-	return B
-	//return extractKey(B, memory, uint32(threads), keyLen)
 }
