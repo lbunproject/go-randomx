@@ -4,4 +4,8 @@ Fork from [git.dero.io/DERO_Foundation/RandomX](https://git.dero.io/DERO_Foundat
 
 Original code failed RandomX testcases and was implemented using big.Float.
 
-This package implements RandomX without CGO, using only Golang code, pure float64 ops and two small assembly sections to implement CFROUND for amd64/arm64. Test cases pass properly.
+This package implements RandomX without CGO, using only Golang code, pure float64 ops and two small assembly sections to implement CFROUND modes.
+
+All test cases pass properly.
+
+Supports `386` `amd64` `arm64` platforms due to rounding mode set via assembly. More can be added with supporting rounding mode under _fpu_.
