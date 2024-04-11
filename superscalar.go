@@ -917,6 +917,7 @@ func (cache *Randomx_Cache) InitDatasetItem(out []uint64, itemnumber uint64) {
 		cache.Programs[i].executeSuperscalar_nocache(rl[:])
 
 		cache.GetBlock(register_value, mix_block)
+		//TODO: this can be optimized with xorBytes
 		for q := range rl {
 			//  fmt.Printf("%d rl[%d] %16x mix %16x\n",i, q,rl[q], mix_block[q])
 			rl[q] ^= mix_block[q]
