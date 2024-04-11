@@ -508,12 +508,20 @@ func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Gener
 
 }
 
-type SuperScalarProgram struct {
-	Instructions    []SuperScalarInstruction // all instructions of program
-	AddressRegister int
+type SuperScalarProgram []SuperScalarInstruction
+
+func (p SuperScalarProgram) setAddressRegister(addressRegister int) {
+	p[0].Dst_Reg = addressRegister
 }
 
-func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
+func (p SuperScalarProgram) AddressRegister() int {
+	return p[0].Dst_Reg
+}
+func (p SuperScalarProgram) Program() []SuperScalarInstruction {
+	return p[1:]
+}
+
+func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 	cycle := 0
 	depcycle := 0
 	//retire_cycle := 0
@@ -525,7 +533,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	macro_op_count := 0
 	throwAwayCount := 0
 	code_size := 0
-	var program SuperScalarProgram
+	program := make(SuperScalarProgram, 1, 512)
 
 	preAllocatedRegisters := gen.allocRegIndex[:]
 
@@ -671,7 +679,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 			// when all uops of current instruction have been issued, add the instruction to supercalara program
 			if macro_op_index >= sins.ins.GetUOPCount() {
 				sins.FixSrcReg() // fix src register once and for all
-				program.Instructions = append(program.Instructions, *sins)
+				program = append(program, *sins)
 
 				if sins.ins.Name == "IMUL_R" || sins.ins.Name == "IMULH_R" || sins.ins.Name == "ISMULH_R" || sins.ins.Name == "IMUL_RCP" {
 					mulcount++
@@ -696,14 +704,17 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 
 	var asic_latencies [8]int
 
-	for i := range program.Instructions {
-		//fmt.Printf("%d %s\n",i ,program[i].String() )
-		lastdst := asic_latencies[program.Instructions[i].Dst_Reg] + 1
-		lastsrc := 0
-		if program.Instructions[i].Dst_Reg != program.Instructions[i].Src_Reg {
-			lastsrc = asic_latencies[program.Instructions[i].Src_Reg] + 1
+	for i := range program {
+		if i == 0 {
+			continue
 		}
-		asic_latencies[program.Instructions[i].Dst_Reg] = Max(lastdst, lastsrc)
+		//fmt.Printf("%d %s\n",i ,program[i].String() )
+		lastdst := asic_latencies[program[i].Dst_Reg] + 1
+		lastsrc := 0
+		if program[i].Dst_Reg != program[i].Src_Reg {
+			lastsrc = asic_latencies[program[i].Src_Reg] + 1
+		}
+		asic_latencies[program[i].Dst_Reg] = Max(lastdst, lastsrc)
 	}
 
 	asic_latency_max := 0
@@ -717,12 +728,12 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 		}
 	}
 
-	program.AddressRegister = address_reg
+	// Set AddressRegister hack
+	program.setAddressRegister(address_reg)
 
 	//fmt.Printf("address_reg %d\n", address_reg)
 
-	return &program
-
+	return program
 }
 
 const CYCLE_MAP_SIZE int = RANDOMX_SUPERSCALAR_LATENCY + 4
@@ -892,10 +903,10 @@ func getMixBlock(register_value uint64, memory []byte) uint64 {
 }
 
 // executeSuperscalar execute the superscalar program
-func executeSuperscalar(p *SuperScalarProgram, r *registerLine) {
+func executeSuperscalar(p []SuperScalarInstruction, r *RegisterLine) {
 
-	for i := range p.Instructions {
-		ins := &p.Instructions[i]
+	for i := range p {
+		ins := &p[i]
 		switch ins.Opcode {
 		case S_ISUB_R:
 			r[ins.Dst_Reg] -= r[ins.Src_Reg]

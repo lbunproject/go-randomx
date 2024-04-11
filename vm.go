@@ -76,7 +76,7 @@ type Config struct {
 }
 
 type REGISTER_FILE struct {
-	r registerLine
+	r RegisterLine
 	f [4][2]float64
 	e [4][2]float64
 	a [4][2]float64

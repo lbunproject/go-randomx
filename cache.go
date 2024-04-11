@@ -1,22 +1,21 @@
 package randomx
 
 import (
-	"slices"
 	"unsafe"
 )
 
 type MemoryBlock [128]uint64
 
-func (m *MemoryBlock) getLine(addr uint64) *registerLine {
+func (m *MemoryBlock) GetLine(addr uint64) *RegisterLine {
 	addr >>= 3
 	//[addr : addr+8 : addr+8]
-	return (*registerLine)(unsafe.Add(unsafe.Pointer(m), addr*8))
+	return (*RegisterLine)(unsafe.Add(unsafe.Pointer(m), addr*8))
 }
 
 type Randomx_Cache struct {
 	Blocks []MemoryBlock
 
-	Programs [RANDOMX_PROGRAM_COUNT]*SuperScalarProgram
+	Programs [RANDOMX_PROGRAM_COUNT]SuperScalarProgram
 }
 
 func Randomx_alloc_cache(flags uint64) *Randomx_Cache {
@@ -41,21 +40,21 @@ func (cache *Randomx_Cache) Init(key []byte) {
 
 	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argonBlock{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))
 
-	cache.Blocks = slices.Clone(memoryBlocks)
+	cache.Blocks = memoryBlocks
 }
 
 // GetMixBlock fetch a 64 byte block in uint64 form
-func (cache *Randomx_Cache) GetMixBlock(addr uint64) *registerLine {
+func (cache *Randomx_Cache) GetMixBlock(addr uint64) *RegisterLine {
 
 	mask := CacheSize/CacheLineSize - 1
 
 	addr = (addr & mask) * CacheLineSize
 
 	block := addr / 1024
-	return cache.Blocks[block].getLine(addr % 1024)
+	return cache.Blocks[block].GetLine(addr % 1024)
 }
 
-func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemNumber uint64) {
+func (cache *Randomx_Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64) {
 	const superscalarMul0 uint64 = 6364136223846793005
 	const superscalarAdd1 uint64 = 9298411001130361340
 	const superscalarAdd2 uint64 = 12065312585734608966
@@ -64,8 +63,6 @@ func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemNumber uint64
 	const superscalarAdd5 uint64 = 10536153434571861004
 	const superscalarAdd6 uint64 = 3398623926847679864
 	const superscalarAdd7 uint64 = 9549104520008361294
-
-	var rl registerLine
 
 	register_value := itemNumber
 	_ = register_value
@@ -84,22 +81,18 @@ func (cache *Randomx_Cache) InitDatasetItem(out *registerLine, itemNumber uint64
 
 		program := cache.Programs[i]
 
-		executeSuperscalar(program, &rl)
+		executeSuperscalar(program.Program(), rl)
 
 		for q := range rl {
 			rl[q] ^= mix[q]
 		}
 
-		register_value = rl[program.AddressRegister]
+		register_value = rl[program.AddressRegister()]
 
-	}
-
-	for q := range rl {
-		out[q] = rl[q]
 	}
 }
 
-func (cache *Randomx_Cache) initDataset(dataset []registerLine, startItem, endItem uint64) {
+func (cache *Randomx_Cache) initDataset(dataset []RegisterLine, startItem, endItem uint64) {
 	for itemNumber := startItem; itemNumber < endItem; itemNumber, dataset = itemNumber+1, dataset[1:] {
 		cache.InitDatasetItem(&dataset[0], itemNumber)
 	}
