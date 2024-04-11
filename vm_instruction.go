@@ -295,7 +295,7 @@ func (vm *VM) Compile_TO_Bytecode() {
 		case 76, 77, 78, 79, 80, 81, 82, 83: // 8
 
 			//fmt.Printf("IMUL_RCP opcode %d\n", opcode)
-			divisor := uint64(instr.IMM())
+			divisor := instr.IMM()
 			if !isZeroOrPowerOf2(divisor) {
 				ibc.Opcode = VM_IMUL_R
 				ibc.idst = &vm.reg.r[dst]

@@ -64,18 +64,6 @@ type VM struct {
 
 }
 
-func SubnormalsToZero(f float64, _ ...any) float64 {
-	//FTZ/DAZ subnormals to zero
-	fbits := math.Float64bits(f)
-	if fbits >= 0x0000000000000001 && fbits <= 0x000fffffffffffff {
-		return 0.
-	} else if fbits >= 0x8000000000000001 && fbits <= 0x800fffffffffffff {
-		return -0.
-	}
-
-	return f
-}
-
 func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
 	return math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode)
 }

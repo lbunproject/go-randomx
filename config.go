@@ -127,7 +127,7 @@ const RANDOMX_FLAG_DEFAULT = 0
 const RANDOMX_FLAG_JIT = 1
 const RANDOMX_FLAG_LARGE_PAGES = 2
 
-func isZeroOrPowerOf2(x uint64) bool {
+func isZeroOrPowerOf2(x uint32) bool {
 	return (x & (x - 1)) == 0
 }
 

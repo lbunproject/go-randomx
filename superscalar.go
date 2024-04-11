@@ -30,7 +30,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import "fmt"
-import "math"
 import "math/bits"
 
 type ExecutionPort byte
@@ -395,7 +394,8 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		//fmt.Printf("q %s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = gen.GetByte()
-		sins.Imm32 = 0
+		sins.Imm32 = uint32((sins.Mod & 0b1100) >> 2) // bits 2-3
+		//sins.Imm32 = 0
 		sins.OpGroup = S_IADD_RS
 		sins.GroupParIsSource = 1
 	case IMUL_R.Name:
@@ -524,10 +524,11 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	var program SuperScalarProgram
 
 	preAllocatedRegisters := gen.allocRegIndex[:]
-	clear(preAllocatedRegisters)
 
 	registers := gen.allocRegisters[:]
-	clear(registers)
+	for i := range registers {
+		registers[i] = Register{}
+	}
 
 	sins := &SuperScalarInstruction{}
 	sins.ins = &Instruction{Name: "NOP"}
@@ -897,7 +898,7 @@ const superscalarAdd7 uint64 = 9549104520008361294
 
 func (cache *Randomx_Cache) InitDatasetItem(out []uint64, itemnumber uint64) {
 	var rl_array, mix_array [8]uint64
-	rl := rl_array[:]
+	rl := rl_array
 	mix_block := mix_array[:]
 	register_value := itemnumber
 	_ = register_value
@@ -913,7 +914,7 @@ func (cache *Randomx_Cache) InitDatasetItem(out []uint64, itemnumber uint64) {
 
 	for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
 		//mix_block_index := getMixBlock(register_value,nil)
-		cache.Programs[i].executeSuperscalar_nocache(rl)
+		cache.Programs[i].executeSuperscalar_nocache(rl[:])
 
 		cache.GetBlock(register_value, mix_block)
 		for q := range rl {
@@ -945,17 +946,17 @@ func (cache *Randomx_Cache) initDataset(start_item, end_item uint64) {
 
 // execute the superscalar program
 func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
+	_ = r[7] // bounds check hint to compiler; see golang.org/issue/14808
+
 	for i := range p.Ins {
 		ins := &p.Ins[i]
-		//fmt.Printf("%d %s\n",i ,program[i].String() )
 		switch ins.Opcode {
 		case S_ISUB_R:
 			r[ins.Dst_Reg] -= r[ins.Src_Reg]
 		case S_IXOR_R:
 			r[ins.Dst_Reg] ^= r[ins.Src_Reg]
 		case S_IADD_RS:
-			mod_shift := (ins.Mod >> 2) % 4 // bits 2-3
-			r[ins.Dst_Reg] += r[ins.Src_Reg] << mod_shift
+			r[ins.Dst_Reg] += r[ins.Src_Reg] << ins.Imm32
 		case S_IMUL_R:
 			r[ins.Dst_Reg] *= r[ins.Src_Reg]
 		case S_IROR_C:
@@ -969,11 +970,7 @@ func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
 		case S_ISMULH_R:
 			r[ins.Dst_Reg] = smulh(int64(r[ins.Dst_Reg]), int64(r[ins.Src_Reg]))
 		case S_IMUL_RCP:
-			r[ins.Dst_Reg] *= randomx_reciprocal(uint64(ins.Imm32))
-
-		default:
-			panic(fmt.Sprintf("unknown opcode %d", ins.Opcode))
-
+			r[ins.Dst_Reg] *= randomx_reciprocal(ins.Imm32)
 		}
 	}
 
@@ -991,23 +988,27 @@ func smulh(a, b int64) uint64 {
 	return uint64(hi)
 }
 
-const p2exp63 uint64 = uint64(1) << 63
+func randomx_reciprocal(divisor uint32) uint64 {
 
-func randomx_reciprocal(divisor uint64) uint64 {
-	quotient := p2exp63 / divisor
-	remainder := p2exp63 % divisor
+	const p2exp63 uint64 = uint64(1) << 63
 
-	shift := uint32(64 - bits.LeadingZeros64(divisor))
+	quotient := p2exp63 / uint64(divisor)
+	remainder := p2exp63 % uint64(divisor)
 
-	return (quotient << shift) + ((remainder << shift) / divisor)
+	shift := uint32(bits.Len32(divisor))
+
+	return (quotient << shift) + ((remainder << shift) / uint64(divisor))
 }
 
 func signExtend2sCompl(x uint32) uint64 {
-	if -1 == (^0) {
-		return uint64(int64(int32(x)))
-	} else if x > math.MaxInt32 {
-		return uint64(x) | 0xffffffff00000000
-	} else {
-		return uint64(x)
-	}
+	return uint64(int64(int32(x)))
+	/*
+		if -1 == (^0) {
+			return
+		} else if x > math.MaxInt32 {
+			return uint64(x) | 0xffffffff00000000
+		} else {
+			return uint64(x)
+		}
+	*/
 }
