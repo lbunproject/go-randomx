@@ -7,9 +7,10 @@ import (
 
 type MemoryBlock [128]uint64
 
-func (m MemoryBlock) getLine(addr uint64) []uint64 {
+func (m *MemoryBlock) getLine(addr uint64) *registerLine {
 	addr >>= 3
-	return m[addr : addr+8]
+	//[addr : addr+8 : addr+8]
+	return (*registerLine)(unsafe.Add(unsafe.Pointer(m), addr*8))
 }
 
 type Randomx_Cache struct {
@@ -44,7 +45,7 @@ func (cache *Randomx_Cache) Init(key []byte) {
 }
 
 // GetMixBlock fetch a 64 byte block in uint64 form
-func (cache *Randomx_Cache) GetMixBlock(addr uint64) []uint64 {
+func (cache *Randomx_Cache) GetMixBlock(addr uint64) *registerLine {
 
 	mask := CacheSize/CacheLineSize - 1
 
