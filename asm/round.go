@@ -1,4 +1,4 @@
-package fpu
+package asm
 
 type RoundingMode uint8
 

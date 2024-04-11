@@ -1,6 +1,6 @@
-//go:build 386
+//go:build amd64
 
-package fpu
+package asm
 
 // stmxcsr reads the MXCSR control and status register.
 //

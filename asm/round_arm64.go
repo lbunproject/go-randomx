@@ -1,6 +1,6 @@
 //go:build arm64
 
-package fpu
+package asm
 
 // GetFPCR returns the value of FPCR register.
 func getFPCR() (value uint32)

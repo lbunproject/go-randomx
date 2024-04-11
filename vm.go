@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/fpu"
+	"git.gammaspectra.live/P2Pool/go-randomx/asm"
 	"math"
 	"runtime"
 )
@@ -59,6 +59,8 @@ type VM struct {
 	mem           MemoryRegisters
 	config        Config // configuration
 	datasetOffset uint64
+
+	Dataset Randomx_Dataset
 
 	Cache *Randomx_Cache // randomx cache
 
@@ -231,10 +233,10 @@ func (vm *VM) CalculateHash(input []byte, output []byte) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	//restore rounding mode to golang expected one
-	defer fpu.SetRoundingMode(fpu.RoundingModeToNearest)
+	defer asm.SetRoundingMode(asm.RoundingModeToNearest)
 
 	// reset rounding mode if new hash being calculated
-	fpu.SetRoundingMode(fpu.RoundingModeToNearest)
+	asm.SetRoundingMode(asm.RoundingModeToNearest)
 
 	input_hash := blake2b.Sum512(input)
 

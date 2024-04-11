@@ -31,7 +31,7 @@ package randomx
 
 import (
 	"fmt"
-	"git.gammaspectra.live/P2Pool/go-randomx/fpu"
+	"git.gammaspectra.live/P2Pool/go-randomx/asm"
 )
 import "math"
 import "math/bits"
@@ -714,7 +714,7 @@ func (vm *VM) InterpretByteCode() {
 		case VM_CFROUND:
 
 			tmp := (bits.RotateLeft64(*ibc.isrc, 0-int(ibc.imm))) % 4 // rotate right
-			fpu.SetRoundingMode(fpu.RoundingMode(tmp))
+			asm.SetRoundingMode(asm.RoundingMode(tmp))
 
 			//panic("round not implemented")
 			//panic("VM_CFROUND")

@@ -8,4 +8,4 @@ This package implements RandomX without CGO, using only Golang code, pure float6
 
 All test cases pass properly.
 
-Supports `386` `amd64` `arm64` platforms due to rounding mode set via assembly. More can be added with supporting rounding mode under _fpu_.
+Supports `386` `amd64` `arm64` platforms due to rounding mode set via assembly. More can be added with supporting rounding mode under _asm_.
