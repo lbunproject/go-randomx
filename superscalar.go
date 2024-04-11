@@ -29,7 +29,9 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "fmt"
+import (
+	"fmt"
+)
 import "math/bits"
 
 type ExecutionPort byte
@@ -220,12 +222,14 @@ var buffer3 = []int{4, 9, 3}
 var buffer4 = []int{4, 4, 4, 4}
 var buffer5 = []int{3, 3, 10}
 
-var Decoder_To_Instruction_Length = [][]int{{4, 8, 4},
-	{7, 3, 3, 3},
-	{3, 7, 3, 3},
-	{4, 9, 3},
-	{4, 4, 4, 4},
-	{3, 3, 10}}
+var Decoder_To_Instruction_Length = [][]int{
+	buffer0,
+	buffer1,
+	buffer2,
+	buffer3,
+	buffer4,
+	buffer5,
+}
 
 type DecoderType int
 
@@ -505,8 +509,8 @@ func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Gener
 }
 
 type SuperScalarProgram struct {
-	Ins        []SuperScalarInstruction // all instructions of program
-	AddressReg int
+	Instructions    []SuperScalarInstruction // all instructions of program
+	AddressRegister int
 }
 
 func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
@@ -667,7 +671,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 			// when all uops of current instruction have been issued, add the instruction to supercalara program
 			if macro_op_index >= sins.ins.GetUOPCount() {
 				sins.FixSrcReg() // fix src register once and for all
-				program.Ins = append(program.Ins, *sins)
+				program.Instructions = append(program.Instructions, *sins)
 
 				if sins.ins.Name == "IMUL_R" || sins.ins.Name == "IMULH_R" || sins.ins.Name == "ISMULH_R" || sins.ins.Name == "IMUL_RCP" {
 					mulcount++
@@ -684,22 +688,22 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 	}
 
 	/*
-		for i := range program.Ins {
-			fmt.Printf("%d %s\n", i, program.Ins[i].String())
+		for i := range program.Instructions {
+			fmt.Printf("%d %s\n", i, program.Instructions[i].String())
 		}
 
 	*/
 
 	var asic_latencies [8]int
 
-	for i := range program.Ins {
+	for i := range program.Instructions {
 		//fmt.Printf("%d %s\n",i ,program[i].String() )
-		lastdst := asic_latencies[program.Ins[i].Dst_Reg] + 1
+		lastdst := asic_latencies[program.Instructions[i].Dst_Reg] + 1
 		lastsrc := 0
-		if program.Ins[i].Dst_Reg != program.Ins[i].Src_Reg {
-			lastsrc = asic_latencies[program.Ins[i].Src_Reg] + 1
+		if program.Instructions[i].Dst_Reg != program.Instructions[i].Src_Reg {
+			lastsrc = asic_latencies[program.Instructions[i].Src_Reg] + 1
 		}
-		asic_latencies[program.Ins[i].Dst_Reg] = Max(lastdst, lastsrc)
+		asic_latencies[program.Instructions[i].Dst_Reg] = Max(lastdst, lastsrc)
 	}
 
 	asic_latency_max := 0
@@ -713,7 +717,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) *SuperScalarProgram {
 		}
 	}
 
-	program.AddressReg = address_reg
+	program.AddressRegister = address_reg
 
 	//fmt.Printf("address_reg %d\n", address_reg)
 
@@ -887,70 +891,11 @@ func getMixBlock(register_value uint64, memory []byte) uint64 {
 	return (register_value * Mask) * CacheLineSize
 }
 
-const superscalarMul0 uint64 = 6364136223846793005
-const superscalarAdd1 uint64 = 9298411001130361340
-const superscalarAdd2 uint64 = 12065312585734608966
-const superscalarAdd3 uint64 = 9306329213124626780
-const superscalarAdd4 uint64 = 5281919268842080866
-const superscalarAdd5 uint64 = 10536153434571861004
-const superscalarAdd6 uint64 = 3398623926847679864
-const superscalarAdd7 uint64 = 9549104520008361294
+// executeSuperscalar execute the superscalar program
+func executeSuperscalar(p *SuperScalarProgram, r *registerLine) {
 
-func (cache *Randomx_Cache) InitDatasetItem(out []uint64, itemnumber uint64) {
-	var rl_array, mix_array [8]uint64
-	rl := rl_array
-	mix_block := mix_array[:]
-	register_value := itemnumber
-	_ = register_value
-
-	rl[0] = (itemnumber + 1) * superscalarMul0
-	rl[1] = rl[0] ^ superscalarAdd1
-	rl[2] = rl[0] ^ superscalarAdd2
-	rl[3] = rl[0] ^ superscalarAdd3
-	rl[4] = rl[0] ^ superscalarAdd4
-	rl[5] = rl[0] ^ superscalarAdd5
-	rl[6] = rl[0] ^ superscalarAdd6
-	rl[7] = rl[0] ^ superscalarAdd7
-
-	for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
-		//mix_block_index := getMixBlock(register_value,nil)
-		cache.Programs[i].executeSuperscalar_nocache(rl[:])
-
-		cache.GetBlock(register_value, mix_block)
-		//TODO: this can be optimized with xorBytes
-		for q := range rl {
-			//  fmt.Printf("%d rl[%d] %16x mix %16x\n",i, q,rl[q], mix_block[q])
-			rl[q] ^= mix_block[q]
-		}
-
-		register_value = rl[cache.Programs[i].AddressReg]
-		//  fmt.Printf("%d\n",i)
-
-	}
-
-	for q := range rl {
-		out[q] = rl[q]
-	}
-}
-
-func (cache *Randomx_Cache) initDataset(start_item, end_item uint64) {
-	for itemnumber := start_item; itemnumber < end_item; itemnumber++ {
-
-		cache.InitDatasetItem(nil, itemnumber)
-
-		// dataset_index += CacheLineSize
-		//fmt.Printf("exiting dataset item\n")
-		break
-
-	}
-}
-
-// execute the superscalar program
-func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
-	_ = r[7] // bounds check hint to compiler; see golang.org/issue/14808
-
-	for i := range p.Ins {
-		ins := &p.Ins[i]
+	for i := range p.Instructions {
+		ins := &p.Instructions[i]
 		switch ins.Opcode {
 		case S_ISUB_R:
 			r[ins.Dst_Reg] -= r[ins.Src_Reg]
@@ -979,19 +924,14 @@ func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
 
 func smulh(a, b int64) uint64 {
 	hi_, _ := bits.Mul64(uint64(a), uint64(b))
-	hi := int64(hi_)
-	if a < 0 {
-		hi -= b
-	}
-	if b < 0 {
-		hi -= a
-	}
-	return uint64(hi)
+	t1 := (a >> 63) & b
+	t2 := (b >> 63) & a
+	return uint64(int64(hi_) - t1 - t2)
 }
 
 func randomx_reciprocal(divisor uint32) uint64 {
 
-	const p2exp63 uint64 = uint64(1) << 63
+	const p2exp63 = uint64(1) << 63
 
 	quotient := p2exp63 / uint64(divisor)
 	remainder := p2exp63 % uint64(divisor)
@@ -1003,13 +943,4 @@ func randomx_reciprocal(divisor uint32) uint64 {
 
 func signExtend2sCompl(x uint32) uint64 {
 	return uint64(int64(int32(x)))
-	/*
-		if -1 == (^0) {
-			return
-		} else if x > math.MaxInt32 {
-			return uint64(x) | 0xffffffff00000000
-		} else {
-			return uint64(x)
-		}
-	*/
 }

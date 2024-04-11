@@ -70,18 +70,13 @@ func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
 	return math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode)
 }
 
-func (cache *Randomx_Cache) VM_Initialize() *VM {
-
-	return &VM{Cache: cache} //// setup the cache
-}
-
 type Config struct {
 	eMask                                  [2]uint64
 	readReg0, readReg1, readReg2, readReg3 uint64
 }
 
 type REGISTER_FILE struct {
-	r [8]uint64
+	r registerLine
 	f [4][2]float64
 	e [4][2]float64
 	a [4][2]float64
@@ -96,8 +91,6 @@ const HIGH = 1
 
 // calculate hash based on input
 func (vm *VM) Run(input_hash []byte) {
-
-	var mix_block [8]uint64
 
 	//fmt.Printf("%x \n", input_hash)
 
@@ -152,61 +145,37 @@ func (vm *VM) Run(input_hash []byte) {
 		spAddr1 ^= spMix >> 32
 		spAddr1 &= ScratchpadL3Mask64
 
-		//fmt.Printf("spAddr0 %x %x\n", spAddr0,spAddr1)
-
 		for i := uint64(0); i < REGISTERSCOUNT; i++ {
 			vm.reg.r[i] ^= vm.Load64(spAddr0 + 8*i)
-			//fmt.Printf("r[%d] %x \n", i,vm.reg.r[i]);
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
 			vm.reg.f[i][LOW] = vm.Load32F(spAddr1 + 8*i)
 			vm.reg.f[i][HIGH] = vm.Load32F(spAddr1 + 8*i + 4)
-			//fmt.Printf("lo %f %f\n", vm.reg.f[i][LOW] , vm.reg.f[i][HIGH]  )
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
 			vm.reg.e[i][LOW] = vm.Load32F(spAddr1 + 8*(i+REGISTERCOUNTFLT))
 			vm.reg.e[i][HIGH] = vm.Load32F(spAddr1 + 8*(i+REGISTERCOUNTFLT) + 4)
 
-			//	fmt.Printf("OR  %x %x\n", (math.Float64bits(vm.reg.e[i][LOW]) & dynamicMantissaMask) |  vm.config.eMask[LOW] , (math.Float64bits(vm.reg.e[i][HIGH]) & dynamicMantissaMask)| vm.config.eMask[HIGH]  )
-
 			vm.reg.e[i][LOW] = MaskRegisterExponentMantissa(vm.reg.e[i][LOW], vm.config.eMask[LOW])
 			vm.reg.e[i][HIGH] = MaskRegisterExponentMantissa(vm.reg.e[i][HIGH], vm.config.eMask[HIGH])
-
-			//fmt.Printf("lo e %f %f\n", vm.reg.e[i][LOW] , vm.reg.e[i][HIGH]  )
 		}
-
-		//for i := uint64(0); i < REGISTERCOUNTFLT; i++{
-		//fmt.Printf("a low  %f high %f\n", vm.reg.a[i][LOW] , vm.reg.a[i][HIGH]  )
-		//}
 
 		vm.InterpretByteCode()
 
 		vm.mem.mx ^= vm.reg.r[vm.config.readReg2] ^ vm.reg.r[vm.config.readReg3]
 		vm.mem.mx &= CacheLineAlignMask
 
-		//fmt.Printf("mx %x\n",vm.mem.mx )
-
+		vm.Dataset.PrefetchDataset(vm.datasetOffset + vm.mem.mx)
 		// execute diffuser superscalar program to get dataset 64 bytes
-		{
-			itemnumber := (vm.datasetOffset + vm.mem.ma) / CacheLineSize
-			//fmt.Printf("qitem number %x\n", itemnumber)
+		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &vm.reg.r)
 
-			vm.Cache.InitDatasetItem(mix_block[:], itemnumber)
-
-			for i := range vm.reg.r {
-				vm.reg.r[i] ^= mix_block[i]
-			}
-
-		}
-		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx // swap the elements
+		// swap the elements
+		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
 
 		for i := uint64(0); i < REGISTERSCOUNT; i++ {
 			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr1+(8*i):], bits.RotateLeft64(vm.reg.r[i], 32))
-
-			//fmt.Printf("reg r[%d] %x\n", i,vm.reg.r[i])
-
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
@@ -215,8 +184,6 @@ func (vm *VM) Run(input_hash []byte) {
 
 			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr0+(16*i):], bits.RotateLeft64(math.Float64bits(vm.reg.f[i][LOW]), 32))
 			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr0+(16*i)+8:], bits.RotateLeft64(math.Float64bits(vm.reg.f[i][HIGH]), 32))
-
-			//	fmt.Printf("%d %+v\n", i, vm.reg.f[i])
 		}
 
 		spAddr0 = 0

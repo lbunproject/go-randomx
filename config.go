@@ -182,39 +182,6 @@ func (b *Blake2Generator) GetUint32() uint32 {
 	return ret
 }
 
-type Randomx_Cache struct {
-	Blocks []block
-
-	Programs [RANDOMX_PROGRAM_COUNT]*SuperScalarProgram
-}
-
-func Randomx_alloc_cache(flags uint64) *Randomx_Cache {
-
-	return &Randomx_Cache{}
-}
-
-func (cache *Randomx_Cache) Randomx_init_cache(key []byte) {
-	//fmt.Printf("appending null byte is not necessary but only done for testing")
-	kkey := append([]byte{}, key...)
-	//kkey = append(kkey,0)
-	//cache->initialize(cache, key, keySize);
-	cache.Blocks = buildBlocks(argon2d, kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
-
-}
-
-// fetch a 64 byte block in uint64 form
-func (cache *Randomx_Cache) GetBlock(addr uint64, out []uint64) {
-
-	mask := CacheSize/CacheLineSize - 1
-
-	addr = (addr & mask) * CacheLineSize
-
-	block := addr / 1024
-	index_within_block := (addr % 1024) / 8
-
-	copy(out, cache.Blocks[block][index_within_block:])
-}
-
 // some constants for argon
 const (
 	argon2d = iota
