@@ -961,12 +961,11 @@ func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
 			r[ins.Dst_Reg] ^= r[ins.Src_Reg]
 		case S_IADD_RS:
 			mod_shift := (ins.Mod >> 2) % 4 // bits 2-3
-			r[ins.Dst_Reg] += (r[ins.Src_Reg] << mod_shift)
+			r[ins.Dst_Reg] += r[ins.Src_Reg] << mod_shift
 		case S_IMUL_R:
 			r[ins.Dst_Reg] *= r[ins.Src_Reg]
 		case S_IROR_C:
 			r[ins.Dst_Reg] = bits.RotateLeft64(r[ins.Dst_Reg], 0-int(ins.Imm32))
-			// panic("check rotate right is working fine")
 		case S_IADD_C7, S_IADD_C8, S_IADD_C9:
 			r[ins.Dst_Reg] += signExtend2sCompl(ins.Imm32)
 		case S_IXOR_C7, S_IXOR_C8, S_IXOR_C9:
@@ -974,7 +973,7 @@ func (p *SuperScalarProgram) executeSuperscalar_nocache(r []uint64) {
 		case S_IMULH_R:
 			r[ins.Dst_Reg], _ = bits.Mul64(r[ins.Dst_Reg], r[ins.Src_Reg])
 		case S_ISMULH_R:
-			r[ins.Dst_Reg] = uint64(smulh(int64(r[ins.Dst_Reg]), int64(r[ins.Src_Reg])))
+			r[ins.Dst_Reg] = smulh(int64(r[ins.Dst_Reg]), int64(r[ins.Src_Reg]))
 		case S_IMUL_RCP:
 			r[ins.Dst_Reg] *= randomx_reciprocal(uint64(ins.Imm32))
 
@@ -1004,20 +1003,9 @@ func randomx_reciprocal(divisor uint64) uint64 {
 	quotient := p2exp63 / divisor
 	remainder := p2exp63 % divisor
 
-	bsr := uint32(0)
-	for bit := divisor; bit > 0; bit >>= 1 {
-		bsr++
-	}
-	for shift := uint32(0); shift < bsr; shift++ {
-		if remainder >= divisor-remainder {
-			quotient = quotient*2 + 1
-			remainder = remainder*2 - divisor
-		} else {
-			quotient = quotient * 2
-			remainder = remainder * 2
-		}
-	}
-	return quotient
+	shift := uint32(64 - bits.LeadingZeros64(divisor))
+
+	return (quotient << shift) + ((remainder << shift) / divisor)
 }
 
 func signExtend2sCompl(x uint32) uint64 {
