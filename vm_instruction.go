@@ -30,11 +30,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"fmt"
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
+	"math"
+	"math/bits"
+	"unsafe"
 )
-import "math"
-import "math/bits"
 import "encoding/binary"
 
 //reference https://github.com/tevador/RandomX/blob/master/doc/specs.md#51-instruction-encoding
@@ -156,11 +156,11 @@ func (vm *VM) Compile_TO_Bytecode() {
 			ibc.idst = &vm.reg.r[dst]
 			if dst != RegisterNeedsDisplacement {
 				ibc.isrc = &vm.reg.r[src]
-				ibc.shift = uint16((instr.Mod() >> 2) % 4)
+				ibc.shift = (instr.Mod() >> 2) % 4
 				ibc.imm = 0
 			} else {
 				ibc.isrc = &vm.reg.r[src]
-				ibc.shift = uint16((instr.Mod() >> 2) % 4)
+				ibc.shift = (instr.Mod() >> 2) % 4
 				ibc.imm = signExtend2sCompl(instr.IMM())
 			}
 			registerUsage[dst] = i
@@ -534,7 +534,7 @@ type InstructionByteCode struct {
 	simm       int64
 	Opcode     VM_Instruction_Type
 	target     int16
-	shift      uint16
+	shift      uint8
 	memMask    uint32
 	/*
 		union {
@@ -563,179 +563,105 @@ func (ibc *InstructionByteCode) getScratchpadAddress() uint64 {
 	return (*ibc.isrc + ibc.imm) & uint64(ibc.memMask)
 }
 
-func (vm *VM) Load64(addr uint64) uint64 {
-	return binary.LittleEndian.Uint64(vm.ScratchPad[addr:])
-}
-func (vm *VM) Load32(addr uint64) uint32 {
-	return binary.LittleEndian.Uint32(vm.ScratchPad[addr:])
+func (ibc *InstructionByteCode) getScratchpadDestAddress() uint64 {
+	return (*ibc.idst + ibc.imm) & uint64(ibc.memMask)
 }
 
-func (vm *VM) Load32F(addr uint64) float64 {
-	return float64(int32(vm.Load32(addr)))
+func (vm *VM) Load64(addr uint64) uint64 {
+	return *(*uint64)(unsafe.Pointer(&vm.ScratchPad[addr]))
+}
+func (vm *VM) Load32(addr uint64) uint32 {
+	return *(*uint32)(unsafe.Pointer(&vm.ScratchPad[addr]))
+}
+
+func (vm *VM) Load32F(addr uint64) (lo, hi float64) {
+	a := *(*[2]int32)(unsafe.Pointer(&vm.ScratchPad[addr]))
+	return float64(a[LOW]), float64(a[HIGH])
+}
+
+func (vm *VM) Load32FA(addr uint64) [2]float64 {
+	a := *(*[2]int32)(unsafe.Pointer(&vm.ScratchPad[addr]))
+	return [2]float64{float64(a[LOW]), float64(a[HIGH])}
 }
 
 func (vm *VM) InterpretByteCode() {
-
 	for pc := 0; pc < RANDOMX_PROGRAM_SIZE; pc++ {
-
 		ibc := &vm.ByteCode[pc]
-		//fmt.Printf("PCLOOP %d opcode %d  %s  dst %d src %d\n",pc,ibc.Opcode, Names[ibc.Opcode], ibc.dst, ibc.src)
-
 		switch ibc.Opcode {
 		case VM_IADD_RS:
-
 			*ibc.idst += (*ibc.isrc << ibc.shift) + ibc.imm
-
-			//panic("VM_IADD_RS")
 		case VM_IADD_M:
 			*ibc.idst += vm.Load64(ibc.getScratchpadAddress())
-
-			//panic("VM_IADD_M")
 		case VM_ISUB_R:
 			*ibc.idst -= *ibc.isrc
-
-			//panic("VM_ISUB_R")
-
 		case VM_ISUB_M:
-
 			*ibc.idst -= vm.Load64(ibc.getScratchpadAddress())
-
-			//panic("VM_ISUB_M")
-		case VM_IMUL_R: // also handles imul_rcp
-
+		case VM_IMUL_R:
+			// also handles imul_rcp
 			*ibc.idst *= *ibc.isrc
-
-			//panic("VM_IMUL_R")
 		case VM_IMUL_M:
 			*ibc.idst *= vm.Load64(ibc.getScratchpadAddress())
-
-			//panic("VM_IMUL_M")
 		case VM_IMULH_R:
-
 			*ibc.idst, _ = bits.Mul64(*ibc.idst, *ibc.isrc)
-
-			// panic("VM_IMULH_R")
 		case VM_IMULH_M:
 			*ibc.idst, _ = bits.Mul64(*ibc.idst, vm.Load64(ibc.getScratchpadAddress()))
-			// fmt.Printf("%x \n",*ibc.idst )
-			// panic("VM_IMULH_M")
 		case VM_ISMULH_R:
-			*ibc.idst = uint64(smulh(int64(*ibc.idst), int64(*ibc.isrc)))
-			// fmt.Printf("dst %x\n", *ibc.idst)
-			// panic("VM_ISMULH_R")
+			*ibc.idst = smulh(int64(*ibc.idst), int64(*ibc.isrc))
 		case VM_ISMULH_M:
-			*ibc.idst = uint64(smulh(int64(*ibc.idst), int64(vm.Load64(ibc.getScratchpadAddress()))))
-			//fmt.Printf("%x \n",*ibc.idst )
-			// panic("VM_ISMULH_M")
+			*ibc.idst = smulh(int64(*ibc.idst), int64(vm.Load64(ibc.getScratchpadAddress())))
 		case VM_INEG_R:
 			*ibc.idst = (^(*ibc.idst)) + 1 // 2's complement negative
-
-			//panic("VM_INEG_R")
 		case VM_IXOR_R:
 			*ibc.idst ^= *ibc.isrc
-
 		case VM_IXOR_M:
 			*ibc.idst ^= vm.Load64(ibc.getScratchpadAddress())
-
-			//panic("VM_IXOR_M")
 		case VM_IROR_R:
 			*ibc.idst = bits.RotateLeft64(*ibc.idst, 0-int(*ibc.isrc&63))
-
-			//panic("VM_IROR_R")
-
 		case VM_IROL_R:
 			*ibc.idst = bits.RotateLeft64(*ibc.idst, int(*ibc.isrc&63))
-
 		case VM_ISWAP_R:
 			*ibc.idst, *ibc.isrc = *ibc.isrc, *ibc.idst
-			//fmt.Printf("%x  %x\n",*ibc.idst, *ibc.isrc )
-			//panic("VM_ISWAP_R")
 		case VM_FSWAP_R:
-			//TODO: could be F+E
-
 			ibc.fdst[HIGH], ibc.fdst[LOW] = ibc.fdst[LOW], ibc.fdst[HIGH]
-		//	fmt.Printf("%+v \n",ibc.fdst )
-		//	panic("VM_FSWAP_R")
 		case VM_FADD_R:
 			ibc.fdst[LOW] += ibc.fsrc[LOW]
 			ibc.fdst[HIGH] += ibc.fsrc[HIGH]
-
-			//panic("VM_FADD_R")
 		case VM_FADD_M:
-			ibc.fdst[LOW] += vm.Load32F(ibc.getScratchpadAddress() + 0)
-			ibc.fdst[HIGH] += vm.Load32F(ibc.getScratchpadAddress() + 4)
-
-			//panic("VM_FADD_M")
+			lo, hi := vm.Load32F(ibc.getScratchpadAddress())
+			ibc.fdst[LOW] += lo
+			ibc.fdst[HIGH] += hi
 		case VM_FSUB_R:
 			ibc.fdst[LOW] -= ibc.fsrc[LOW]
 			ibc.fdst[HIGH] -= ibc.fsrc[HIGH]
-
-			//fmt.Printf("fdst float %+v\n", ibc.fdst  )
-			//panic("VM_FSUB_R")
 		case VM_FSUB_M:
-			ibc.fdst[LOW] -= vm.Load32F(ibc.getScratchpadAddress() + 0)
-			ibc.fdst[HIGH] -= vm.Load32F(ibc.getScratchpadAddress() + 4)
-
-			//panic("VM_FSUB_M")
-		case VM_FSCAL_R: // no dependent on rounding modes
-			//mask := math.Float64frombits(0x80F0000000000000)
+			lo, hi := vm.Load32F(ibc.getScratchpadAddress())
+			ibc.fdst[LOW] -= lo
+			ibc.fdst[HIGH] -= hi
+		case VM_FSCAL_R:
+			// no dependent on rounding modes
 			ibc.fdst[LOW] = math.Float64frombits(math.Float64bits(ibc.fdst[LOW]) ^ 0x80F0000000000000)
 			ibc.fdst[HIGH] = math.Float64frombits(math.Float64bits(ibc.fdst[HIGH]) ^ 0x80F0000000000000)
-
-			//fmt.Printf("fdst float %+v\n", ibc.fdst  )
-			//panic("VM_FSCA_M")
 		case VM_FMUL_R:
 			ibc.fdst[LOW] *= ibc.fsrc[LOW]
 			ibc.fdst[HIGH] *= ibc.fsrc[HIGH]
-
-			//panic("VM_FMUL_R")
 		case VM_FDIV_M:
-			ibc.fdst[LOW] /= MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+0), vm.config.eMask[LOW])
-			ibc.fdst[HIGH] /= MaskRegisterExponentMantissa(vm.Load32F(ibc.getScratchpadAddress()+4), vm.config.eMask[HIGH])
-
-			//panic("VM_FDIV_M")
+			lo, hi := vm.Load32F(ibc.getScratchpadAddress())
+			ibc.fdst[LOW] /= MaskRegisterExponentMantissa(lo, vm.config.eMask[LOW])
+			ibc.fdst[HIGH] /= MaskRegisterExponentMantissa(hi, vm.config.eMask[HIGH])
 		case VM_FSQRT_R:
 			ibc.fdst[LOW] = math.Sqrt(ibc.fdst[LOW])
 			ibc.fdst[HIGH] = math.Sqrt(ibc.fdst[HIGH])
-
-			// panic("VM_FSQRT")
 		case VM_CBRANCH:
-			//fmt.Printf("pc %d  src  %x   imm %x\n",pc ,*ibc.isrc,  ibc.imm)
 			*ibc.isrc += ibc.imm
-			//fmt.Printf("pc %d\n",pc)
 			if (*ibc.isrc & uint64(ibc.memMask)) == 0 {
 				pc = int(ibc.target)
-
 			}
-
-			// fmt.Printf("pc %d\n",pc)
-			//panic("VM_CBRANCH")
 		case VM_CFROUND:
-
 			tmp := (bits.RotateLeft64(*ibc.isrc, 0-int(ibc.imm))) % 4 // rotate right
 			asm.SetRoundingMode(asm.RoundingMode(tmp))
-
-			//panic("round not implemented")
-			//panic("VM_CFROUND")
 		case VM_ISTORE:
 			binary.LittleEndian.PutUint64(vm.ScratchPad[(*ibc.idst+ibc.imm)&uint64(ibc.memMask):], *ibc.isrc)
-
-			//panic("VM_ISTOREM")
-
 		case VM_NOP: // we do nothing
-
-		default:
-			panic("instruction not implemented")
-
 		}
-		/*fmt.Printf("REGS ")
-		for j := 0; j <7;j++ {
-			fmt.Printf("%16x, " , vm.reg.r[j])
-		}
-		fmt.Printf("\n")
-		*/
-
 	}
 }
-
-var umm888_ = fmt.Sprintf("")

@@ -34,6 +34,10 @@ func Randomx_alloc_cache(flags uint64) *Randomx_Cache {
 	}
 }
 
+func (cache *Randomx_Cache) HasJIT() bool {
+	return cache.Flags&RANDOMX_FLAG_JIT > 0 && cache.JitPrograms[0] != nil
+}
+
 func (cache *Randomx_Cache) VM_Initialize() *VM {
 
 	return &VM{
@@ -102,34 +106,45 @@ func (cache *Randomx_Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64)
 	rl[6] = rl[0] ^ keys.SuperScalar_Constants[6]
 	rl[7] = rl[0] ^ keys.SuperScalar_Constants[7]
 
-	if cache.JitPrograms[0] != nil {
-		for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
-			mix := cache.GetMixBlock(registerValue)
+	for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
+		mix := cache.GetMixBlock(registerValue)
 
-			cache.JitPrograms[i].Execute(rl)
+		program := cache.Programs[i]
 
-			for q := range rl {
-				rl[q] ^= mix[q]
-			}
+		executeSuperscalar(program.Program(), rl)
 
-			registerValue = rl[cache.Programs[i].AddressRegister()]
-
+		for q := range rl {
+			rl[q] ^= mix[q]
 		}
-	} else {
-		for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
-			mix := cache.GetMixBlock(registerValue)
 
-			program := cache.Programs[i]
+		registerValue = rl[program.AddressRegister()]
 
-			executeSuperscalar(program.Program(), rl)
+	}
+}
 
-			for q := range rl {
-				rl[q] ^= mix[q]
-			}
+func (cache *Randomx_Cache) InitDatasetItemJIT(rl *RegisterLine, itemNumber uint64) {
+	registerValue := itemNumber
 
-			registerValue = rl[program.AddressRegister()]
+	rl[0] = (itemNumber + 1) * keys.SuperScalar_Constants[0]
+	rl[1] = rl[0] ^ keys.SuperScalar_Constants[1]
+	rl[2] = rl[0] ^ keys.SuperScalar_Constants[2]
+	rl[3] = rl[0] ^ keys.SuperScalar_Constants[3]
+	rl[4] = rl[0] ^ keys.SuperScalar_Constants[4]
+	rl[5] = rl[0] ^ keys.SuperScalar_Constants[5]
+	rl[6] = rl[0] ^ keys.SuperScalar_Constants[6]
+	rl[7] = rl[0] ^ keys.SuperScalar_Constants[7]
 
+	for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
+		mix := cache.GetMixBlock(registerValue)
+
+		cache.JitPrograms[i].Execute(rl)
+
+		for q := range rl {
+			rl[q] ^= mix[q]
 		}
+
+		registerValue = rl[cache.Programs[i].AddressRegister()]
+
 	}
 }
 

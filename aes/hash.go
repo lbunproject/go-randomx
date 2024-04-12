@@ -30,7 +30,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package aes
 
 import (
-	"encoding/binary"
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/keys"
 	"unsafe"
 )
@@ -48,20 +47,20 @@ import (
 //
 //	Hashing throughput: >20 GiB/s per CPU core with hardware AES
 func HashAes1Rx4(input []byte, output *[64]byte) {
+	if len(input)%64 != 0 {
+		panic("unsupported")
+	}
 
+	// states are copied
 	states := keys.AesHash1R_State
 
-	var in [4][4]uint32
 	for input_ptr := 0; input_ptr < len(input); input_ptr += 64 {
-		for i := 0; i < 63; i += 4 { // load 64 bytes
-			in[i/16][(i%16)/4] = binary.LittleEndian.Uint32(input[input_ptr+i:])
-		}
+		in := (*[4][4]uint32)(unsafe.Pointer(unsafe.SliceData(input[input_ptr:])))
 
 		soft_aesenc(&states[0], &in[0])
 		soft_aesdec(&states[1], &in[1])
 		soft_aesenc(&states[2], &in[2])
 		soft_aesdec(&states[3], &in[3])
-
 	}
 
 	soft_aesenc(&states[0], &keys.AesHash1R_XKeys[0])
@@ -74,11 +73,7 @@ func HashAes1Rx4(input []byte, output *[64]byte) {
 	soft_aesenc(&states[2], &keys.AesHash1R_XKeys[1])
 	soft_aesdec(&states[3], &keys.AesHash1R_XKeys[1])
 
-	// write back to state
-	for i := 0; i < 63; i += 4 {
-		binary.LittleEndian.PutUint32(output[i:], states[i/16][(i%16)/4])
-	}
-
+	copy(output[:], (*[64]byte)(unsafe.Pointer(&states))[:])
 }
 
 // FillAes1Rx4
@@ -110,15 +105,17 @@ func FillAes1Rx4(state *[64]byte, output []byte) {
 }
 
 // FillAes4Rx4 used to generate final program
-func FillAes4Rx4(state *[64]byte, output []byte) {
-
-	var states [4][4]uint32
-	for i := 0; i < 63; i += 4 {
-		states[i/16][(i%16)/4] = binary.LittleEndian.Uint32(state[i:])
+func FillAes4Rx4(state [64]byte, output []byte) {
+	if len(output)%len(state) != 0 {
+		panic("unsupported")
 	}
 
-	outptr := 0
-	for ; outptr < len(output); outptr += 64 {
+	// state is copied on caller
+
+	// Copy state
+	states := (*[4][4]uint32)(unsafe.Pointer(&state))
+
+	for outptr := 0; outptr < len(output); outptr += len(state) {
 		soft_aesdec(&states[0], &keys.AesGenerator4R_Keys[0])
 		soft_aesenc(&states[1], &keys.AesGenerator4R_Keys[0])
 		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[4])
@@ -139,11 +136,7 @@ func FillAes4Rx4(state *[64]byte, output []byte) {
 		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[7])
 		soft_aesenc(&states[3], &keys.AesGenerator4R_Keys[7])
 
-		// store bytes to output buffer
-		for i := 0; i < 63; i += 4 {
-			binary.LittleEndian.PutUint32(output[outptr+i:], states[i/16][(i%16)/4])
-		}
-
+		copy(output[outptr:], state[:])
 	}
 
 }

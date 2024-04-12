@@ -10,7 +10,11 @@ func (d *Randomx_DatasetLight) PrefetchDataset(address uint64) {
 }
 
 func (d *Randomx_DatasetLight) ReadDataset(address uint64, r, cache *RegisterLine) {
-	d.Cache.InitDatasetItem(cache, address/CacheLineSize)
+	if d.Cache.HasJIT() {
+		d.Cache.InitDatasetItemJIT(cache, address/CacheLineSize)
+	} else {
+		d.Cache.InitDatasetItem(cache, address/CacheLineSize)
+	}
 
 	for i := range r {
 		r[i] ^= cache[i]

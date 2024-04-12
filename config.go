@@ -85,6 +85,7 @@ const ScratchpadL1Mask16 = (ScratchpadL1/2 - 1) * 16
 const ScratchpadL2Mask16 = (ScratchpadL2/2 - 1) * 16
 const ScratchpadL3Mask = (ScratchpadL3 - 1) * 8
 const ScratchpadL3Mask64 = (ScratchpadL3/8 - 1) * 64
+
 const CONDITIONOFFSET = RANDOMX_JUMP_OFFSET
 const CONDITIONMASK = ((1 << RANDOMX_JUMP_BITS) - 1)
 const STOREL3CONDITION = 14

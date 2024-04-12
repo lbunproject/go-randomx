@@ -8,6 +8,9 @@ import (
 )
 
 func (f ProgramFunc) Execute(rl *RegisterLine) {
+	if f == nil {
+		panic("program is nil")
+	}
 	memoryPtr := &f
 	fun := *(*func(rl *RegisterLine))(unsafe.Pointer(&memoryPtr))
 
