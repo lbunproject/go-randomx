@@ -1,3 +1,3 @@
 package randomx
 
-type RegisterLine [8]uint64
+type RegisterLine [REGISTERSCOUNT]uint64

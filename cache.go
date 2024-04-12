@@ -1,6 +1,8 @@
 package randomx
 
 import (
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/keys"
+	"runtime"
 	"slices"
 	"unsafe"
 )
@@ -54,6 +56,9 @@ func (cache *Randomx_Cache) Close() error {
 }
 
 func (cache *Randomx_Cache) Init(key []byte) {
+	// Lock due to external JIT madness
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	kkey := slices.Clone(key)
 
@@ -86,25 +91,16 @@ func (cache *Randomx_Cache) GetMixBlock(addr uint64) *RegisterLine {
 }
 
 func (cache *Randomx_Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64) {
-	const superscalarMul0 uint64 = 6364136223846793005
-	const superscalarAdd1 uint64 = 9298411001130361340
-	const superscalarAdd2 uint64 = 12065312585734608966
-	const superscalarAdd3 uint64 = 9306329213124626780
-	const superscalarAdd4 uint64 = 5281919268842080866
-	const superscalarAdd5 uint64 = 10536153434571861004
-	const superscalarAdd6 uint64 = 3398623926847679864
-	const superscalarAdd7 uint64 = 9549104520008361294
-
 	registerValue := itemNumber
 
-	rl[0] = (itemNumber + 1) * superscalarMul0
-	rl[1] = rl[0] ^ superscalarAdd1
-	rl[2] = rl[0] ^ superscalarAdd2
-	rl[3] = rl[0] ^ superscalarAdd3
-	rl[4] = rl[0] ^ superscalarAdd4
-	rl[5] = rl[0] ^ superscalarAdd5
-	rl[6] = rl[0] ^ superscalarAdd6
-	rl[7] = rl[0] ^ superscalarAdd7
+	rl[0] = (itemNumber + 1) * keys.SuperScalar_Constants[0]
+	rl[1] = rl[0] ^ keys.SuperScalar_Constants[1]
+	rl[2] = rl[0] ^ keys.SuperScalar_Constants[2]
+	rl[3] = rl[0] ^ keys.SuperScalar_Constants[3]
+	rl[4] = rl[0] ^ keys.SuperScalar_Constants[4]
+	rl[5] = rl[0] ^ keys.SuperScalar_Constants[5]
+	rl[6] = rl[0] ^ keys.SuperScalar_Constants[6]
+	rl[7] = rl[0] ^ keys.SuperScalar_Constants[7]
 
 	if cache.JitPrograms[0] != nil {
 		for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {

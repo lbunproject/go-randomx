@@ -564,11 +564,10 @@ func (ibc *InstructionByteCode) getScratchpadAddress() uint64 {
 }
 
 func (vm *VM) Load64(addr uint64) uint64 {
-	//return uint64(binary.BigEndian.Uint32(vm.ScratchPad[addr:]))| (uint64(binary.BigEndian.Uint32(vm.ScratchPad[addr+4:])) <<32)
-	return bits.RotateLeft64(binary.BigEndian.Uint64(vm.ScratchPad[addr:]), 32)
+	return binary.LittleEndian.Uint64(vm.ScratchPad[addr:])
 }
 func (vm *VM) Load32(addr uint64) uint32 {
-	return binary.BigEndian.Uint32(vm.ScratchPad[addr:])
+	return binary.LittleEndian.Uint32(vm.ScratchPad[addr:])
 }
 
 func (vm *VM) Load32F(addr uint64) float64 {
@@ -719,7 +718,7 @@ func (vm *VM) InterpretByteCode() {
 			//panic("round not implemented")
 			//panic("VM_CFROUND")
 		case VM_ISTORE:
-			binary.BigEndian.PutUint64(vm.ScratchPad[(*ibc.idst+ibc.imm)&uint64(ibc.memMask):], bits.RotateLeft64(*ibc.isrc, 32))
+			binary.LittleEndian.PutUint64(vm.ScratchPad[(*ibc.idst+ibc.imm)&uint64(ibc.memMask):], *ibc.isrc)
 
 			//panic("VM_ISTOREM")
 

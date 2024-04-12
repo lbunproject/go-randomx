@@ -30,11 +30,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/aes"
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
 	"math"
 	"runtime"
 )
-import "math/bits"
 import "encoding/binary"
 import "golang.org/x/crypto/blake2b"
 
@@ -90,11 +90,11 @@ const LOW = 0
 const HIGH = 1
 
 // calculate hash based on input
-func (vm *VM) Run(input_hash []byte) {
+func (vm *VM) Run(input_hash *[64]byte) {
 
 	//fmt.Printf("%x \n", input_hash)
 
-	fillAes4Rx4(input_hash[:], vm.buffer[:])
+	aes.FillAes4Rx4(input_hash, vm.buffer[:])
 
 	for i := range vm.entropy {
 		vm.entropy[i] = binary.LittleEndian.Uint64(vm.buffer[i*8:])
@@ -106,14 +106,10 @@ func (vm *VM) Run(input_hash []byte) {
 
 	// do more initialization before we run
 
-	vm.reg.a[0][LOW] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[0]))
-	vm.reg.a[0][HIGH] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[1]))
-	vm.reg.a[1][LOW] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[2]))
-	vm.reg.a[1][HIGH] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[3]))
-	vm.reg.a[2][LOW] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[4]))
-	vm.reg.a[2][HIGH] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[5]))
-	vm.reg.a[3][LOW] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[6]))
-	vm.reg.a[3][HIGH] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[7]))
+	for i := range vm.entropy[:8] {
+		vm.reg.a[i/2][i%2] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[i]))
+	}
+
 	vm.mem.ma = vm.entropy[8] & CacheLineAlignMask
 	vm.mem.mx = vm.entropy[10]
 	addressRegisters := vm.entropy[12]
@@ -125,8 +121,8 @@ func (vm *VM) Run(input_hash []byte) {
 	addressRegisters >>= 1
 	vm.config.readReg3 = 6 + (addressRegisters & 1)
 	vm.datasetOffset = (vm.entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
-	vm.config.eMask[0] = getFloatMask(vm.entropy[14])
-	vm.config.eMask[1] = getFloatMask(vm.entropy[15])
+	vm.config.eMask[LOW] = getFloatMask(vm.entropy[14])
+	vm.config.eMask[HIGH] = getFloatMask(vm.entropy[15])
 
 	//fmt.Printf("prog %x  entropy 0 %x %f \n", vm.buffer[:32], vm.entropy[0], vm.reg.a[0][HIGH])
 
@@ -175,15 +171,15 @@ func (vm *VM) Run(input_hash []byte) {
 		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
 
 		for i := uint64(0); i < REGISTERSCOUNT; i++ {
-			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr1+(8*i):], bits.RotateLeft64(vm.reg.r[i], 32))
+			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr1+8*i:], vm.reg.r[i])
 		}
 
 		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
 			vm.reg.f[i][LOW] = math.Float64frombits(math.Float64bits(vm.reg.f[i][LOW]) ^ math.Float64bits(vm.reg.e[i][LOW]))
 			vm.reg.f[i][HIGH] = math.Float64frombits(math.Float64bits(vm.reg.f[i][HIGH]) ^ math.Float64bits(vm.reg.e[i][HIGH]))
 
-			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr0+(16*i):], bits.RotateLeft64(math.Float64bits(vm.reg.f[i][LOW]), 32))
-			binary.BigEndian.PutUint64(vm.ScratchPad[spAddr0+(16*i)+8:], bits.RotateLeft64(math.Float64bits(vm.reg.f[i][HIGH]), 32))
+			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr0+16*i:], math.Float64bits(vm.reg.f[i][LOW]))
+			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr0+16*i+8:], math.Float64bits(vm.reg.f[i][HIGH]))
 		}
 
 		spAddr0 = 0
@@ -191,6 +187,12 @@ func (vm *VM) Run(input_hash []byte) {
 
 	}
 
+}
+
+func (vm *VM) InitScratchpad(seed *[64]byte) {
+	// calculate and fill scratchpad
+	clear(vm.ScratchPad[:])
+	aes.FillAes1Rx4(seed, vm.ScratchPad[:])
 }
 
 func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
@@ -205,18 +207,14 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	// reset rounding mode if new hash being calculated
 	asm.SetRoundingMode(asm.RoundingModeToNearest)
 
-	input_hash := blake2b.Sum512(input)
+	tempHash := blake2b.Sum512(input)
 
-	// calculate and fill scratchpad
-	clear(vm.ScratchPad[:])
-	fillAes1Rx4(input_hash[:], vm.ScratchPad[:])
+	vm.InitScratchpad(&tempHash)
 
 	hash512, _ := blake2b.New512(nil)
 
-	temp_hash := input_hash[:]
-
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
-		vm.Run(temp_hash)
+		vm.Run(&tempHash)
 
 		hash512.Reset()
 		for i := range vm.reg.r {
@@ -241,19 +239,18 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.a[i][LOW]))
 			hash512.Write(buf[:])
 			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.a[i][HIGH]))
-
 			hash512.Write(buf[:])
 		}
 
-		temp_hash = hash512.Sum(input_hash[:0])
-		//fmt.Printf("%d temphash %x\n", chain, temp_hash)
+		hash512.Sum(tempHash[:0])
+		//fmt.Printf("%d temphash %x\n", chain, tempHash)
 	}
 
 	// final loop executes here
-	vm.Run(temp_hash)
+	vm.Run(&tempHash)
 
 	// now hash the scratch pad and place into register a
-	hashAes1Rx4(vm.ScratchPad[:], temp_hash)
+	aes.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
 
 	hash256, _ := blake2b.New256(nil)
 
@@ -278,23 +275,12 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 		hash256.Write(buf[:])
 	}
 
-	// copy temp_hash as it first copied to register and then hashed
-	hash256.Write(temp_hash)
+	// copy tempHash as it first copied to register and then hashed
+	hash256.Write(tempHash[:])
 
 	hash256.Sum(output[:0])
 }
 
-/*
-const  mantissaSize = 52;
-const  exponentSize = 11;
-const  mantissaMask = ( (uint64(1)) << mantissaSize) - 1;
-const  exponentMask = (uint64(1) << exponentSize) - 1;
-const  exponentBias = 1023;
-const  dynamicExponentBits = 4;
-const  staticExponentBits = 4;
-const  constExponentBits uint64= 0x300;
-const  dynamicMantissaMask = ( uint64(1) << (mantissaSize + dynamicExponentBits)) - 1;
-*/
 const mask22bit = (uint64(1) << 22) - 1
 
 func getSmallPositiveFloatBits(entropy uint64) uint64 {

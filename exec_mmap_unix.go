@@ -19,21 +19,27 @@ func (f ProgramFunc) Close() error {
 }
 
 func mapProgram(program []byte) ProgramFunc {
-	execFunc, err := unix.Mmap(
-		-1,
-		0,
-		len(program),
-		unix.PROT_READ|unix.PROT_WRITE|unix.PROT_EXEC,
-		unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)
+	// Write only
+	execFunc, err := unix.Mmap(-1, 0, len(program), unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)
 	if err != nil {
 		panic(err)
 	}
 
+	// Introduce machine code into the memory region
 	copy(execFunc, program)
 
-	// Remove PROT_WRITE
+	// uphold W^X
+
+	// Read and Exec only
 	err = unix.Mprotect(execFunc, unix.PROT_READ|unix.PROT_EXEC)
 	if err != nil {
+		defer func() {
+			// unmap if we err
+			err := unix.Munmap(execFunc)
+			if err != nil {
+				panic(err)
+			}
+		}()
 		panic(err)
 	}
 
