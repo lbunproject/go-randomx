@@ -38,7 +38,6 @@ func (b *Blake2Generator) checkdata(bytesNeeded int) {
 func (b *Blake2Generator) GetByte() byte {
 	b.checkdata(1)
 	ret := b.data[b.dataindex]
-	//fmt.Printf("returning byte %02x\n", ret)
 	b.dataindex++
 	return ret
 }

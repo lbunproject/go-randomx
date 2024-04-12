@@ -149,9 +149,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 		ibc.src = src
 		switch opcode {
 		case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15: // 16 frequency
-
-			//      ibc.Opcode = VM_NOP; break; replace opcode by nop for testing
-			//	fmt.Printf("VM_IADD_RS %d\n", opcode)
 			ibc.Opcode = VM_IADD_RS
 			ibc.idst = &vm.reg.r[dst]
 			if dst != RegisterNeedsDisplacement {
@@ -166,7 +163,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			registerUsage[dst] = i
 
 		case 16, 17, 18, 19, 20, 21, 22: // 7
-			//fmt.Printf("IADD_M opcode %d\n", opcode)
 			ibc.Opcode = VM_IADD_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -183,7 +179,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38: // 16
-			//fmt.Printf("ISUB_R opcode %d\n", opcode)
 			ibc.Opcode = VM_ISUB_R
 			ibc.idst = &vm.reg.r[dst]
 
@@ -196,7 +191,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 39, 40, 41, 42, 43, 44, 45: // 7
-			//fmt.Printf("ISUB_M opcode %d\n", opcode)
 			ibc.Opcode = VM_ISUB_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -213,8 +207,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61: // 16
-
-			//fmt.Printf("IMUL_R opcode %d\n", opcode)
 			ibc.Opcode = VM_IMUL_R
 			ibc.idst = &vm.reg.r[dst]
 
@@ -227,8 +219,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 62, 63, 64, 65: //4
-
-			//fmt.Printf("IMUL_M opcode %d\n", opcode)
 			ibc.Opcode = VM_IMUL_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -245,14 +235,11 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 66, 67, 68, 69: //4
-
-			//fmt.Printf("IMULH_R opcode %d\n", opcode)
 			ibc.Opcode = VM_IMULH_R
 			ibc.idst = &vm.reg.r[dst]
 			ibc.isrc = &vm.reg.r[src]
 			registerUsage[dst] = i
 		case 70: //1
-			//fmt.Printf("IMULH_M opcode %d\n", opcode)
 			ibc.Opcode = VM_IMULH_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -269,14 +256,11 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 71, 72, 73, 74: //4
-			//fmt.Printf("ISMULH_R opcode %d\n", opcode)
 			ibc.Opcode = VM_ISMULH_R
 			ibc.idst = &vm.reg.r[dst]
 			ibc.isrc = &vm.reg.r[src]
 			registerUsage[dst] = i
 		case 75: //1
-			//fmt.Printf("ISMULH_M opcode %d\n", opcode)
-
 			ibc.Opcode = VM_ISMULH_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -293,8 +277,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 76, 77, 78, 79, 80, 81, 82, 83: // 8
-
-			//fmt.Printf("IMUL_RCP opcode %d\n", opcode)
 			divisor := instr.IMM()
 			if !isZeroOrPowerOf2(divisor) {
 				ibc.Opcode = VM_IMUL_R
@@ -307,14 +289,10 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 
 		case 84, 85: //2
-			//fmt.Printf("INEG_R opcode %d\n", opcode)
-
 			ibc.Opcode = VM_INEG_R
 			ibc.idst = &vm.reg.r[dst]
 			registerUsage[dst] = i
 		case 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100: //15
-
-			//fmt.Printf("IXOR_R opcode %d\n", opcode)
 			ibc.Opcode = VM_IXOR_R
 			ibc.idst = &vm.reg.r[dst]
 
@@ -327,7 +305,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 101, 102, 103, 104, 105: //5
-			//fmt.Printf("IXOR_M opcode %d\n", opcode)
 			ibc.Opcode = VM_IXOR_M
 			ibc.idst = &vm.reg.r[dst]
 			ibc.imm = signExtend2sCompl(instr.IMM())
@@ -344,8 +321,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 106, 107, 108, 109, 110, 111, 112, 113: //8
-
-			//fmt.Printf("IROR_R opcode %d\n", opcode)
 			ibc.Opcode = VM_IROR_R
 			ibc.idst = &vm.reg.r[dst]
 
@@ -358,8 +333,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			registerUsage[dst] = i
 		case 114, 115: // 2 IROL_R
-
-			//fmt.Printf("IROL_R opcode %d\n", opcode)
 			ibc.Opcode = VM_IROL_R
 			ibc.idst = &vm.reg.r[dst]
 
@@ -373,8 +346,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			registerUsage[dst] = i
 
 		case 116, 117, 118, 119: //4
-
-			//fmt.Printf("ISWAP_R opcode %d\n", opcode)
 			if src != dst {
 				ibc.Opcode = VM_ISWAP_R
 				ibc.idst = &vm.reg.r[dst]
@@ -388,8 +359,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 
 		// below are floating point instructions
 		case 120, 121, 122, 123: // 4
-
-			//fmt.Printf("FSWAP_R opcode %d\n", opcode)
 			ibc.Opcode = VM_FSWAP_R
 			if dst < REGISTERCOUNTFLT {
 				ibc.fdst = &vm.reg.f[dst]
@@ -397,8 +366,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 				ibc.fdst = &vm.reg.e[dst-REGISTERCOUNTFLT]
 			}
 		case 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139: //16
-
-			//fmt.Printf("FADD_R opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			src := instr.Src() % REGISTERCOUNTFLT
 			ibc.Opcode = VM_FADD_R
@@ -406,8 +373,6 @@ func (vm *VM) Compile_TO_Bytecode() {
 			ibc.fsrc = &vm.reg.a[src]
 
 		case 140, 141, 142, 143, 144: //5
-
-			//fmt.Printf("FADD_M opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			ibc.Opcode = VM_FADD_M
 			ibc.fdst = &vm.reg.f[dst]
@@ -420,16 +385,12 @@ func (vm *VM) Compile_TO_Bytecode() {
 			ibc.imm = signExtend2sCompl(instr.IMM())
 
 		case 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160: //16
-
-			//fmt.Printf("FSUB_R opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			src := instr.Src() % REGISTERCOUNTFLT
 			ibc.Opcode = VM_FSUB_R
 			ibc.fdst = &vm.reg.f[dst]
 			ibc.fsrc = &vm.reg.a[src]
 		case 161, 162, 163, 164, 165: //5
-
-			//fmt.Printf("FSUB_M opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			ibc.Opcode = VM_FSUB_M
 			ibc.fdst = &vm.reg.f[dst]
@@ -442,22 +403,16 @@ func (vm *VM) Compile_TO_Bytecode() {
 			ibc.imm = signExtend2sCompl(instr.IMM())
 
 		case 166, 167, 168, 169, 170, 171: //6
-
-			//fmt.Printf("FSCAL_R opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			ibc.Opcode = VM_FSCAL_R
 			ibc.fdst = &vm.reg.f[dst]
 		case 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203: //32
-
-			//fmt.Printf("FMUL_R opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			src := instr.Src() % REGISTERCOUNTFLT
 			ibc.Opcode = VM_FMUL_R
 			ibc.fdst = &vm.reg.e[dst]
 			ibc.fsrc = &vm.reg.a[src]
 		case 204, 205, 206, 207: //4
-
-			//fmt.Printf("FDIV_M opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			ibc.Opcode = VM_FDIV_M
 			ibc.fdst = &vm.reg.e[dst]
@@ -469,14 +424,11 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 			ibc.imm = signExtend2sCompl(instr.IMM())
 		case 208, 209, 210, 211, 212, 213: //6
-			//fmt.Printf("FSQRT_R opcode %d\n", opcode)
 			dst := instr.Dst() % REGISTERCOUNTFLT // bit shift optimization
 			ibc.Opcode = VM_FSQRT_R
 			ibc.fdst = &vm.reg.e[dst]
 
 		case 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238: //25  // CBRANCH and CFROUND are interchanged
-
-			//fmt.Printf("CBRANCH opcode %d\n", opcode)
 			ibc.Opcode = VM_CBRANCH
 			reg := instr.Dst() % REGISTERSCOUNT
 			ibc.isrc = &vm.reg.r[reg]
@@ -494,15 +446,11 @@ func (vm *VM) Compile_TO_Bytecode() {
 			}
 
 		case 239: //1
-			//   ibc.Opcode = VM_NOP; break; // not supported
-			//fmt.Printf("CFROUND opcode %d\n", opcode)
 			ibc.Opcode = VM_CFROUND
 			ibc.isrc = &vm.reg.r[src]
 			ibc.imm = uint64(instr.IMM() & 63)
 
 		case 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255: //16
-			//    ibc.Opcode = VM_NOP; break;
-			//fmt.Printf("ISTORE opcode %d\n", opcode)
 			ibc.Opcode = VM_ISTORE
 			ibc.idst = &vm.reg.r[dst]
 			ibc.isrc = &vm.reg.r[src]

@@ -91,8 +91,6 @@ const HIGH = 1
 // calculate hash based on input
 func (vm *VM) Run(input_hash [64]byte) {
 
-	//fmt.Printf("%x \n", input_hash)
-
 	aes.FillAes4Rx4(input_hash, vm.buffer[:])
 
 	for i := range vm.entropy {
@@ -121,8 +119,6 @@ func (vm *VM) Run(input_hash [64]byte) {
 	vm.datasetOffset = (vm.entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
 	vm.config.eMask[LOW] = getFloatMask(vm.entropy[14])
 	vm.config.eMask[HIGH] = getFloatMask(vm.entropy[15])
-
-	//fmt.Printf("prog %x  entropy 0 %x %f \n", vm.buffer[:32], vm.entropy[0], vm.reg.a[0][HIGH])
 
 	vm.Compile_TO_Bytecode()
 
@@ -240,7 +236,6 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 		}
 
 		hash512.Sum(tempHash[:0])
-		//fmt.Printf("%d temphash %x\n", chain, tempHash)
 	}
 
 	// final loop executes here
