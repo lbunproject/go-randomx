@@ -67,7 +67,7 @@ const RANDOMX_JUMP_OFFSET = 8
 
 const DATASETEXTRAITEMS = RANDOMX_DATASET_EXTRA_SIZE / RANDOMX_DATASET_ITEM_SIZE
 
-const SuperscalarMaxSize int = 3*RANDOMX_SUPERSCALAR_LATENCY + 2
+const SuperscalarMaxSize = 3*RANDOMX_SUPERSCALAR_LATENCY + 2
 const RANDOMX_DATASET_ITEM_SIZE uint64 = 64
 const CacheLineSize uint64 = RANDOMX_DATASET_ITEM_SIZE
 const ScratchpadSize uint32 = RANDOMX_SCRATCHPAD_L3
@@ -102,9 +102,8 @@ const staticExponentBits = 4
 const constExponentBits uint64 = 0x300
 const dynamicMantissaMask = (uint64(1) << (mantissaSize + dynamicExponentBits)) - 1
 
-const RANDOMX_FLAG_DEFAULT = 0
-const RANDOMX_FLAG_JIT = 1
-const RANDOMX_FLAG_LARGE_PAGES = 2
+const RANDOMX_FLAG_DEFAULT = uint64(0)
+const RANDOMX_FLAG_JIT = uint64(1 << iota)
 
 func isZeroOrPowerOf2(x uint32) bool {
 	return (x & (x - 1)) == 0

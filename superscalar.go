@@ -398,7 +398,8 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 		//fmt.Printf("q %s \n", ins.Name)
 		sins.Name = ins.Name
 		sins.Mod = gen.GetByte()
-		sins.Imm32 = uint32((sins.Mod & 0b1100) >> 2) // bits 2-3
+		// set modshift on Imm32
+		sins.Imm32 = uint32((sins.Mod >> 2) % 4) // bits 2-3
 		//sins.Imm32 = 0
 		sins.OpGroup = S_IADD_RS
 		sins.GroupParIsSource = 1

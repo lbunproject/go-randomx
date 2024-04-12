@@ -9,13 +9,11 @@ func (d *Randomx_DatasetLight) PrefetchDataset(address uint64) {
 
 }
 
-func (d *Randomx_DatasetLight) ReadDataset(address uint64, r *RegisterLine) {
-	var out RegisterLine
-
-	d.Cache.InitDatasetItem(&out, address/CacheLineSize)
+func (d *Randomx_DatasetLight) ReadDataset(address uint64, r, cache *RegisterLine) {
+	d.Cache.InitDatasetItem(cache, address/CacheLineSize)
 
 	for i := range r {
-		r[i] ^= out[i]
+		r[i] ^= cache[i]
 	}
 }
 

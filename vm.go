@@ -137,6 +137,8 @@ func (vm *VM) Run(input_hash []byte) {
 	spAddr0 := vm.mem.mx
 	spAddr1 := vm.mem.ma
 
+	var rlCache RegisterLine
+
 	for ic := 0; ic < RANDOMX_PROGRAM_ITERATIONS; ic++ {
 		spMix := vm.reg.r[vm.config.readReg0] ^ vm.reg.r[vm.config.readReg1]
 
@@ -169,7 +171,7 @@ func (vm *VM) Run(input_hash []byte) {
 
 		vm.Dataset.PrefetchDataset(vm.datasetOffset + vm.mem.mx)
 		// execute diffuser superscalar program to get dataset 64 bytes
-		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &vm.reg.r)
+		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &vm.reg.r, &rlCache)
 
 		// swap the elements
 		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
@@ -193,7 +195,7 @@ func (vm *VM) Run(input_hash []byte) {
 
 }
 
-func (vm *VM) CalculateHash(input []byte, output []byte) {
+func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	var buf [8]byte
 
 	// Lock thread due to rounding mode flags
@@ -244,7 +246,7 @@ func (vm *VM) CalculateHash(input []byte, output []byte) {
 			hash512.Write(buf[:])
 		}
 
-		temp_hash = hash512.Sum(nil)
+		temp_hash = hash512.Sum(input_hash[:0])
 		//fmt.Printf("%d temphash %x\n", chain, temp_hash)
 	}
 
@@ -280,11 +282,7 @@ func (vm *VM) CalculateHash(input []byte, output []byte) {
 	// copy temp_hash as it first copied to register and then hashed
 	hash256.Write(temp_hash)
 
-	final_hash := hash256.Sum(nil)
-
-	copy(output, final_hash)
-
-	//fmt.Printf("final %x\n", final_hash)
+	hash256.Sum(output[:0])
 }
 
 /*

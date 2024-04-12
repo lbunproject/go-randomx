@@ -55,16 +55,17 @@ func Test_Randomx(t *testing.T) {
 
 		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
 			c.Init(tt.key)
+			defer func() {
+				err := c.Close()
+				if err != nil {
+					t.Error(err)
+				}
+			}()
 
-			nonce := uint32(0) //uint32(len(key))
-			gen := Init_Blake2Generator(tt.key, nonce)
-			for i := 0; i < 8; i++ {
-				c.Programs[i] = Build_SuperScalar_Program(gen) // build a superscalar program
-			}
 			vm := c.VM_Initialize()
 
 			var output_hash [32]byte
-			vm.CalculateHash(tt.input, output_hash[:])
+			vm.CalculateHash(tt.input, &output_hash)
 
 			actual := fmt.Sprintf("%x", output_hash)
 			if actual != tt.expected {
@@ -83,18 +84,19 @@ func Benchmark_RandomX(b *testing.B) {
 	c := Randomx_alloc_cache(0)
 
 	c.Init(tt.key)
+	defer func() {
+		err := c.Close()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
 
-	nonce := uint32(0) //uint32(len(key))
-	gen := Init_Blake2Generator(tt.key, nonce)
-	for i := 0; i < 8; i++ {
-		c.Programs[i] = Build_SuperScalar_Program(gen) // build a superscalar program
-	}
 	vm := c.VM_Initialize()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var output_hash [32]byte
-		vm.CalculateHash(tt.input, output_hash[:])
+		vm.CalculateHash(tt.input, &output_hash)
 		runtime.KeepAlive(output_hash)
 	}
 }

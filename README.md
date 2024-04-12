@@ -8,4 +8,17 @@ This package implements RandomX without CGO, using only Golang code, pure float6
 
 All test cases pass properly.
 
-Supports `386` `amd64` `arm64` platforms due to rounding mode set via assembly. More can be added with supporting rounding mode under _asm_.
+Uses minimal Go assembly due to having to set rounding mode natively. Support can be added with supporting rounding mode under _asm_.
+
+JIT is supported on a few platforms but can be hard-disabled via the `disable_jit` build flag, or at runtime.
+
+|  Platform   | Supported | SuperScalar JIT |      Notes       |
+|:-----------:|:---------:|:---------------:|:----------------:|
+|   **386**   |     ✅     |        ❌        |                  |
+|  **amd64**  |     ✅     |       ✅*        | JIT only on Unix |
+|   **arm**   |     ❌     |        -        |                  |
+|  **arm64**  |     ✅     |        ❌        |                  |
+|  **mips**   |     ❌     |        -        |                  |
+| **mips64**  |     ❌     |        -        |                  |
+| **riscv64** |     ❌     |        -        |                  |
+|  **wasm**   |     ❌     |        -        |                  |
