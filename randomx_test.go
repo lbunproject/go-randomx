@@ -92,11 +92,37 @@ func Benchmark_RandomX(b *testing.B) {
 	}()
 
 	vm := c.VM_Initialize()
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var output_hash [32]byte
 		vm.CalculateHash(tt.input, &output_hash)
 		runtime.KeepAlive(output_hash)
 	}
+}
+
+func Benchmark_RandomXParallel(b *testing.B) {
+	b.ReportAllocs()
+
+	tt := Tests[0]
+
+	c := Randomx_alloc_cache(0)
+
+	c.Init(tt.key)
+	defer func() {
+		err := c.Close()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var output_hash [32]byte
+		vm := c.VM_Initialize()
+
+		for pb.Next() {
+			vm.CalculateHash(tt.input, &output_hash)
+			runtime.KeepAlive(output_hash)
+		}
+	})
 }

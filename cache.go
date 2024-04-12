@@ -1,6 +1,7 @@
 package randomx
 
 import (
+	"slices"
 	"unsafe"
 )
 
@@ -53,10 +54,9 @@ func (cache *Randomx_Cache) Close() error {
 }
 
 func (cache *Randomx_Cache) Init(key []byte) {
-	//fmt.Printf("appending null byte is not necessary but only done for testing")
-	kkey := append([]byte{}, key...)
-	//kkey = append(kkey,0)
-	//cache->initialize(cache, key, keySize);
+
+	kkey := slices.Clone(key)
+
 	argonBlocks := argon2_buildBlocks(kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
 
 	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argonBlock{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))

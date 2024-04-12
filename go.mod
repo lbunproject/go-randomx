@@ -1,4 +1,4 @@
-module git.gammaspectra.live/P2Pool/go-randomx
+module git.gammaspectra.live/P2Pool/go-randomx/v2
 
 go 1.21
 

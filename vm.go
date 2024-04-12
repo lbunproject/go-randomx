@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
 	"math"
 	"runtime"
 )
@@ -47,7 +47,7 @@ type VM struct {
 	State_start [64]byte
 	buffer      [RANDOMX_PROGRAM_SIZE*8 + 16*8]byte // first 128 bytes are entropy below rest are program bytes
 	Prog        []byte
-	ScratchPad  []byte
+	ScratchPad  [ScratchpadSize]byte
 
 	ByteCode [RANDOMX_PROGRAM_SIZE]InstructionByteCode
 
@@ -102,9 +102,7 @@ func (vm *VM) Run(input_hash []byte) {
 
 	vm.Prog = vm.buffer[len(vm.entropy)*8:]
 
-	for i := range vm.reg.r {
-		vm.reg.r[i] = 0
-	}
+	clear(vm.reg.r[:])
 
 	// do more initialization before we run
 
@@ -209,8 +207,9 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 
 	input_hash := blake2b.Sum512(input)
 
-	vm.ScratchPad = make([]byte, ScratchpadSize, ScratchpadSize) // calculate and fill scratchpad
-	fillAes1Rx4(input_hash[:], vm.ScratchPad)
+	// calculate and fill scratchpad
+	clear(vm.ScratchPad[:])
+	fillAes1Rx4(input_hash[:], vm.ScratchPad[:])
 
 	hash512, _ := blake2b.New512(nil)
 
@@ -254,7 +253,7 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	vm.Run(temp_hash)
 
 	// now hash the scratch pad and place into register a
-	hashAes1Rx4(vm.ScratchPad, temp_hash)
+	hashAes1Rx4(vm.ScratchPad[:], temp_hash)
 
 	hash256, _ := blake2b.New256(nil)
 
