@@ -85,8 +85,8 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) ProgramFunc {
 	for i := range p {
 		instr := &p[i]
 
-		dst := instr.Dst_Reg % REGISTERSCOUNT
-		src := instr.Src_Reg % REGISTERSCOUNT
+		dst := instr.Dst_Reg % RegistersCount
+		src := instr.Src_Reg % RegistersCount
 
 		switch instr.Opcode {
 		case S_ISUB_R:

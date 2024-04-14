@@ -49,13 +49,13 @@ type VM struct {
 	Prog       []byte
 	ScratchPad [ScratchpadSize]byte
 
-	ByteCode [RANDOMX_PROGRAM_SIZE]InstructionByteCode
+	ByteCode ByteCode
 
 	// program configuration  see program.hpp
 
 	entropy [16]uint64
 
-	reg           REGISTER_FILE // the register file
+	reg           RegisterFile // the register file
 	mem           MemoryRegisters
 	config        Config // configuration
 	datasetOffset uint64
@@ -73,16 +73,6 @@ func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
 type Config struct {
 	eMask   [2]uint64
 	readReg [4]uint64
-}
-
-type REGISTER_FILE struct {
-	r RegisterLine
-	f [4][2]float64
-	e [4][2]float64
-	a [4][2]float64
-}
-type MemoryRegisters struct {
-	mx, ma uint64
 }
 
 const LOW = 0
@@ -120,7 +110,7 @@ func (vm *VM) Run(input_hash [64]byte) {
 	vm.config.eMask[LOW] = getFloatMask(vm.entropy[14])
 	vm.config.eMask[HIGH] = getFloatMask(vm.entropy[15])
 
-	vm.Compile_TO_Bytecode()
+	vm.CompileToBytecode()
 
 	spAddr0 := vm.mem.mx
 	spAddr1 := vm.mem.ma
@@ -135,23 +125,23 @@ func (vm *VM) Run(input_hash [64]byte) {
 		spAddr1 ^= spMix >> 32
 		spAddr1 &= ScratchpadL3Mask64
 
-		for i := uint64(0); i < REGISTERSCOUNT; i++ {
+		for i := uint64(0); i < RegistersCount; i++ {
 			vm.reg.r[i] ^= vm.Load64(spAddr0 + 8*i)
 		}
 
-		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
+		for i := uint64(0); i < RegistersCountFloat; i++ {
 			vm.reg.f[i] = vm.Load32FA(spAddr1 + 8*i)
 		}
 
-		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
-			vm.reg.e[i] = vm.Load32FA(spAddr1 + 8*(i+REGISTERCOUNTFLT))
+		for i := uint64(0); i < RegistersCountFloat; i++ {
+			vm.reg.e[i] = vm.Load32FA(spAddr1 + 8*(i+RegistersCountFloat))
 
 			vm.reg.e[i][LOW] = MaskRegisterExponentMantissa(vm.reg.e[i][LOW], vm.config.eMask[LOW])
 			vm.reg.e[i][HIGH] = MaskRegisterExponentMantissa(vm.reg.e[i][HIGH], vm.config.eMask[HIGH])
 		}
 
 		// todo: pass register file directly!
-		vm.InterpretByteCode()
+		vm.ByteCode.Interpret(vm)
 
 		vm.mem.mx ^= vm.reg.r[vm.config.readReg[2]] ^ vm.reg.r[vm.config.readReg[3]]
 		vm.mem.mx &= CacheLineAlignMask
@@ -163,11 +153,11 @@ func (vm *VM) Run(input_hash [64]byte) {
 		// swap the elements
 		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
 
-		for i := uint64(0); i < REGISTERSCOUNT; i++ {
+		for i := uint64(0); i < RegistersCount; i++ {
 			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr1+8*i:], vm.reg.r[i])
 		}
 
-		for i := uint64(0); i < REGISTERCOUNTFLT; i++ {
+		for i := uint64(0); i < RegistersCountFloat; i++ {
 			vm.reg.f[i][LOW] = math.Float64frombits(math.Float64bits(vm.reg.f[i][LOW]) ^ math.Float64bits(vm.reg.e[i][LOW]))
 			vm.reg.f[i][HIGH] = math.Float64frombits(math.Float64bits(vm.reg.f[i][HIGH]) ^ math.Float64bits(vm.reg.e[i][HIGH]))
 

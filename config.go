@@ -90,9 +90,6 @@ const CONDITIONOFFSET = RANDOMX_JUMP_OFFSET
 const CONDITIONMASK = ((1 << RANDOMX_JUMP_BITS) - 1)
 const STOREL3CONDITION = 14
 
-const REGISTERSCOUNT = 8
-const REGISTERCOUNTFLT = 4
-
 const mantissaSize = 52
 const exponentSize = 11
 const mantissaMask = (uint64(1) << mantissaSize) - 1
