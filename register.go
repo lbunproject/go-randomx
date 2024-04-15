@@ -3,6 +3,9 @@ package randomx
 const RegistersCount = 8
 const RegistersCountFloat = 4
 
+const LOW = 0
+const HIGH = 1
+
 type RegisterLine [RegistersCount]uint64
 
 type RegisterFile struct {

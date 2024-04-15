@@ -47,7 +47,7 @@ type VM struct {
 	StateStart [64]byte
 	buffer     [RANDOMX_PROGRAM_SIZE*8 + 16*8]byte // first 128 bytes are entropy below rest are program bytes
 	Prog       []byte
-	ScratchPad [ScratchpadSize]byte
+	ScratchPad ScratchPad
 
 	ByteCode ByteCode
 
@@ -75,13 +75,10 @@ type Config struct {
 	readReg [4]uint64
 }
 
-const LOW = 0
-const HIGH = 1
+// Run calculate hash based on input
+func (vm *VM) Run(inputHash [64]byte) {
 
-// calculate hash based on input
-func (vm *VM) Run(input_hash [64]byte) {
-
-	aes.FillAes4Rx4(input_hash, vm.buffer[:])
+	aes.FillAes4Rx4(inputHash, vm.buffer[:])
 
 	for i := range vm.entropy {
 		vm.entropy[i] = binary.LittleEndian.Uint64(vm.buffer[i*8:])
@@ -126,22 +123,21 @@ func (vm *VM) Run(input_hash [64]byte) {
 		spAddr1 &= ScratchpadL3Mask64
 
 		for i := uint64(0); i < RegistersCount; i++ {
-			vm.reg.r[i] ^= vm.Load64(spAddr0 + 8*i)
+			vm.reg.r[i] ^= vm.ScratchPad.Load64(uint32(spAddr0 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			vm.reg.f[i] = vm.Load32FA(spAddr1 + 8*i)
+			vm.reg.f[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			vm.reg.e[i] = vm.Load32FA(spAddr1 + 8*(i+RegistersCountFloat))
+			vm.reg.e[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
 
 			vm.reg.e[i][LOW] = MaskRegisterExponentMantissa(vm.reg.e[i][LOW], vm.config.eMask[LOW])
 			vm.reg.e[i][HIGH] = MaskRegisterExponentMantissa(vm.reg.e[i][HIGH], vm.config.eMask[HIGH])
 		}
 
-		// todo: pass register file directly!
-		vm.ByteCode.Interpret(vm)
+		vm.reg = vm.ByteCode.Execute(vm.reg, &vm.ScratchPad, vm.config.eMask)
 
 		vm.mem.mx ^= vm.reg.r[vm.config.readReg[2]] ^ vm.reg.r[vm.config.readReg[3]]
 		vm.mem.mx &= CacheLineAlignMask
@@ -154,15 +150,15 @@ func (vm *VM) Run(input_hash [64]byte) {
 		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
 
 		for i := uint64(0); i < RegistersCount; i++ {
-			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr1+8*i:], vm.reg.r[i])
+			vm.ScratchPad.Store64(uint32(spAddr1+8*i), vm.reg.r[i])
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
 			vm.reg.f[i][LOW] = math.Float64frombits(math.Float64bits(vm.reg.f[i][LOW]) ^ math.Float64bits(vm.reg.e[i][LOW]))
 			vm.reg.f[i][HIGH] = math.Float64frombits(math.Float64bits(vm.reg.f[i][HIGH]) ^ math.Float64bits(vm.reg.e[i][HIGH]))
 
-			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr0+16*i:], math.Float64bits(vm.reg.f[i][LOW]))
-			binary.LittleEndian.PutUint64(vm.ScratchPad[spAddr0+16*i+8:], math.Float64bits(vm.reg.f[i][HIGH]))
+			vm.ScratchPad.Store64(uint32(spAddr0+16*i), math.Float64bits(vm.reg.f[i][LOW]))
+			vm.ScratchPad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(vm.reg.f[i][HIGH]))
 		}
 
 		spAddr0 = 0
@@ -173,9 +169,7 @@ func (vm *VM) Run(input_hash [64]byte) {
 }
 
 func (vm *VM) InitScratchpad(seed *[64]byte) {
-	// calculate and fill scratchpad
-	clear(vm.ScratchPad[:])
-	aes.FillAes1Rx4(seed, vm.ScratchPad[:])
+	vm.ScratchPad.Init(seed)
 }
 
 func (vm *VM) CalculateHash(input []byte, output *[32]byte) {

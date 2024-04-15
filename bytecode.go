@@ -1,22 +1,17 @@
 package randomx
 
 import (
-	"encoding/binary"
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
 	"math"
 	"math/bits"
 )
 
 type ByteCodeInstruction struct {
-	dst, src   byte
-	idst, isrc *uint64
-	fdst, fsrc *[2]float64
-	imm        uint64
-	simm       int64
-	Opcode     ByteCodeInstructionOp
-	target     int16
-	shift      uint8
-	memMask    uint32
+	Dst, Src byte
+	ImmB     uint8
+	Opcode   ByteCodeInstructionOp
+	MemMask  uint32
+	Imm      uint64
 	/*
 		union {
 			int_reg_t* idst;
@@ -40,112 +35,127 @@ type ByteCodeInstruction struct {
 
 }
 
-func (i ByteCodeInstruction) getScratchpadSrcAddress() uint64 {
-	return (*i.isrc + i.imm) & uint64(i.memMask)
+func (i ByteCodeInstruction) jumpTarget() int {
+	return int(int16((uint16(i.ImmB) << 8) | uint16(i.Dst)))
 }
 
-func (i ByteCodeInstruction) getScratchpadZeroAddress() uint64 {
-	return i.imm & uint64(i.memMask)
+func (i ByteCodeInstruction) getScratchpadAddress(ptr uint64) uint32 {
+	return uint32(ptr+i.Imm) & i.MemMask
 }
 
-func (i ByteCodeInstruction) getScratchpadDestAddress() uint64 {
-	return (*i.idst + i.imm) & uint64(i.memMask)
+func (i ByteCodeInstruction) getScratchpadZeroAddress() uint32 {
+	return uint32(i.Imm) & i.MemMask
 }
 
 type ByteCode [RANDOMX_PROGRAM_SIZE]ByteCodeInstruction
 
-func (c *ByteCode) Interpret(vm *VM) {
+func (c *ByteCode) Execute(f RegisterFile, pad *ScratchPad, eMask [2]uint64) RegisterFile {
 	for pc := 0; pc < RANDOMX_PROGRAM_SIZE; pc++ {
-		ibc := c[pc]
-		switch ibc.Opcode {
+		i := &c[pc]
+		switch i.Opcode {
 		case VM_IADD_RS:
-			*ibc.idst += (*ibc.isrc << ibc.shift) + ibc.imm
+			f.r[i.Dst] += (f.r[i.Src] << i.ImmB) + i.Imm
 		case VM_IADD_M:
-			*ibc.idst += vm.Load64(ibc.getScratchpadSrcAddress())
+			f.r[i.Dst] += pad.Load64(i.getScratchpadAddress(f.r[i.Src]))
 		case VM_IADD_MZ:
-			*ibc.idst += vm.Load64(ibc.getScratchpadZeroAddress())
+			f.r[i.Dst] += pad.Load64(uint32(i.Imm))
 		case VM_ISUB_R:
-			*ibc.idst -= *ibc.isrc
+			f.r[i.Dst] -= f.r[i.Src]
+		case VM_ISUB_I:
+			f.r[i.Dst] -= i.Imm
 		case VM_ISUB_M:
-			*ibc.idst -= vm.Load64(ibc.getScratchpadSrcAddress())
+			f.r[i.Dst] -= pad.Load64(i.getScratchpadAddress(f.r[i.Src]))
 		case VM_ISUB_MZ:
-			*ibc.idst -= vm.Load64(ibc.getScratchpadZeroAddress())
+			f.r[i.Dst] -= pad.Load64(uint32(i.Imm))
 		case VM_IMUL_R:
+			f.r[i.Dst] *= f.r[i.Src]
+		case VM_IMUL_I:
 			// also handles imul_rcp
-			*ibc.idst *= *ibc.isrc
+			f.r[i.Dst] *= i.Imm
 		case VM_IMUL_M:
-			*ibc.idst *= vm.Load64(ibc.getScratchpadSrcAddress())
+			f.r[i.Dst] *= pad.Load64(i.getScratchpadAddress(f.r[i.Src]))
 		case VM_IMUL_MZ:
-			*ibc.idst *= vm.Load64(ibc.getScratchpadZeroAddress())
+			f.r[i.Dst] *= pad.Load64(uint32(i.Imm))
 		case VM_IMULH_R:
-			*ibc.idst, _ = bits.Mul64(*ibc.idst, *ibc.isrc)
+			f.r[i.Dst], _ = bits.Mul64(f.r[i.Dst], f.r[i.Src])
 		case VM_IMULH_M:
-			*ibc.idst, _ = bits.Mul64(*ibc.idst, vm.Load64(ibc.getScratchpadSrcAddress()))
+			f.r[i.Dst], _ = bits.Mul64(f.r[i.Dst], pad.Load64(i.getScratchpadAddress(f.r[i.Src])))
 		case VM_IMULH_MZ:
-			*ibc.idst, _ = bits.Mul64(*ibc.idst, vm.Load64(ibc.getScratchpadZeroAddress()))
+			f.r[i.Dst], _ = bits.Mul64(f.r[i.Dst], pad.Load64(uint32(i.Imm)))
 		case VM_ISMULH_R:
-			*ibc.idst = smulh(int64(*ibc.idst), int64(*ibc.isrc))
+			f.r[i.Dst] = smulh(int64(f.r[i.Dst]), int64(f.r[i.Src]))
 		case VM_ISMULH_M:
-			*ibc.idst = smulh(int64(*ibc.idst), int64(vm.Load64(ibc.getScratchpadSrcAddress())))
+			f.r[i.Dst] = smulh(int64(f.r[i.Dst]), int64(pad.Load64(i.getScratchpadAddress(f.r[i.Src]))))
 		case VM_ISMULH_MZ:
-			*ibc.idst = smulh(int64(*ibc.idst), int64(vm.Load64(ibc.getScratchpadZeroAddress())))
+			f.r[i.Dst] = smulh(int64(f.r[i.Dst]), int64(pad.Load64(uint32(i.Imm))))
 		case VM_INEG_R:
-			*ibc.idst = (^(*ibc.idst)) + 1 // 2's complement negative
+			//f.r[i.Dst] = (^(f.r[i.Dst])) + 1 // 2's complement negative
+			f.r[i.Dst] = -f.r[i.Dst]
 		case VM_IXOR_R:
-			*ibc.idst ^= *ibc.isrc
+			f.r[i.Dst] ^= f.r[i.Src]
+		case VM_IXOR_I:
+			f.r[i.Dst] ^= i.Imm
 		case VM_IXOR_M:
-			*ibc.idst ^= vm.Load64(ibc.getScratchpadSrcAddress())
+			f.r[i.Dst] ^= pad.Load64(i.getScratchpadAddress(f.r[i.Src]))
 		case VM_IXOR_MZ:
-			*ibc.idst ^= vm.Load64(ibc.getScratchpadZeroAddress())
+			f.r[i.Dst] ^= pad.Load64(uint32(i.Imm))
 		case VM_IROR_R:
-			*ibc.idst = bits.RotateLeft64(*ibc.idst, 0-int(*ibc.isrc&63))
+			f.r[i.Dst] = bits.RotateLeft64(f.r[i.Dst], 0-int(f.r[i.Src]&63))
+		case VM_IROR_I:
+			//todo: can merge into VM_IROL_I
+			f.r[i.Dst] = bits.RotateLeft64(f.r[i.Dst], 0-int(i.Imm&63))
 		case VM_IROL_R:
-			*ibc.idst = bits.RotateLeft64(*ibc.idst, int(*ibc.isrc&63))
+			f.r[i.Dst] = bits.RotateLeft64(f.r[i.Dst], int(f.r[i.Src]&63))
+		case VM_IROL_I:
+			f.r[i.Dst] = bits.RotateLeft64(f.r[i.Dst], int(i.Imm&63))
 		case VM_ISWAP_R:
-			*ibc.idst, *ibc.isrc = *ibc.isrc, *ibc.idst
-		case VM_FSWAP_R:
-			ibc.fdst[HIGH], ibc.fdst[LOW] = ibc.fdst[LOW], ibc.fdst[HIGH]
+			f.r[i.Dst], f.r[i.Src] = f.r[i.Src], f.r[i.Dst]
+		case VM_FSWAP_RF:
+			f.f[i.Dst][HIGH], f.f[i.Dst][LOW] = f.f[i.Dst][LOW], f.f[i.Dst][HIGH]
+		case VM_FSWAP_RE:
+			f.e[i.Dst][HIGH], f.e[i.Dst][LOW] = f.e[i.Dst][LOW], f.e[i.Dst][HIGH]
 		case VM_FADD_R:
-			ibc.fdst[LOW] += ibc.fsrc[LOW]
-			ibc.fdst[HIGH] += ibc.fsrc[HIGH]
+			f.f[i.Dst][LOW] += f.a[i.Src][LOW]
+			f.f[i.Dst][HIGH] += f.a[i.Src][HIGH]
 		case VM_FADD_M:
-			lo, hi := vm.Load32F(ibc.getScratchpadSrcAddress())
-			ibc.fdst[LOW] += lo
-			ibc.fdst[HIGH] += hi
+			lo, hi := pad.Load32F(i.getScratchpadAddress(f.r[i.Src]))
+			f.f[i.Dst][LOW] += lo
+			f.f[i.Dst][HIGH] += hi
 		case VM_FSUB_R:
-			ibc.fdst[LOW] -= ibc.fsrc[LOW]
-			ibc.fdst[HIGH] -= ibc.fsrc[HIGH]
+			f.f[i.Dst][LOW] -= f.a[i.Src][LOW]
+			f.f[i.Dst][HIGH] -= f.a[i.Src][HIGH]
 		case VM_FSUB_M:
-			lo, hi := vm.Load32F(ibc.getScratchpadSrcAddress())
-			ibc.fdst[LOW] -= lo
-			ibc.fdst[HIGH] -= hi
+			lo, hi := pad.Load32F(i.getScratchpadAddress(f.r[i.Src]))
+			f.f[i.Dst][LOW] -= lo
+			f.f[i.Dst][HIGH] -= hi
 		case VM_FSCAL_R:
 			// no dependent on rounding modes
-			ibc.fdst[LOW] = math.Float64frombits(math.Float64bits(ibc.fdst[LOW]) ^ 0x80F0000000000000)
-			ibc.fdst[HIGH] = math.Float64frombits(math.Float64bits(ibc.fdst[HIGH]) ^ 0x80F0000000000000)
+			f.f[i.Dst][LOW] = math.Float64frombits(math.Float64bits(f.f[i.Dst][LOW]) ^ 0x80F0000000000000)
+			f.f[i.Dst][HIGH] = math.Float64frombits(math.Float64bits(f.f[i.Dst][HIGH]) ^ 0x80F0000000000000)
 		case VM_FMUL_R:
-			ibc.fdst[LOW] *= ibc.fsrc[LOW]
-			ibc.fdst[HIGH] *= ibc.fsrc[HIGH]
+			f.e[i.Dst][LOW] *= f.a[i.Src][LOW]
+			f.e[i.Dst][HIGH] *= f.a[i.Src][HIGH]
 		case VM_FDIV_M:
-			lo, hi := vm.Load32F(ibc.getScratchpadSrcAddress())
-			ibc.fdst[LOW] /= MaskRegisterExponentMantissa(lo, vm.config.eMask[LOW])
-			ibc.fdst[HIGH] /= MaskRegisterExponentMantissa(hi, vm.config.eMask[HIGH])
+			lo, hi := pad.Load32F(i.getScratchpadAddress(f.r[i.Src]))
+			f.e[i.Dst][LOW] /= MaskRegisterExponentMantissa(lo, eMask[LOW])
+			f.e[i.Dst][HIGH] /= MaskRegisterExponentMantissa(hi, eMask[HIGH])
 		case VM_FSQRT_R:
-			ibc.fdst[LOW] = math.Sqrt(ibc.fdst[LOW])
-			ibc.fdst[HIGH] = math.Sqrt(ibc.fdst[HIGH])
+			f.e[i.Dst][LOW] = math.Sqrt(f.e[i.Dst][LOW])
+			f.e[i.Dst][HIGH] = math.Sqrt(f.e[i.Dst][HIGH])
 		case VM_CBRANCH:
-			*ibc.isrc += ibc.imm
-			if (*ibc.isrc & uint64(ibc.memMask)) == 0 {
-				pc = int(ibc.target)
+			f.r[i.Src] += i.Imm
+			if (f.r[i.Src] & uint64(i.MemMask)) == 0 {
+				pc = i.jumpTarget()
 			}
 		case VM_CFROUND:
-			tmp := (bits.RotateLeft64(*ibc.isrc, 0-int(ibc.imm))) % 4 // rotate right
+			tmp := (bits.RotateLeft64(f.r[i.Src], 0-int(i.Imm))) % 4 // rotate right
 			asm.SetRoundingMode(asm.RoundingMode(tmp))
 		case VM_ISTORE:
-			binary.LittleEndian.PutUint64(vm.ScratchPad[(*ibc.idst+ibc.imm)&uint64(ibc.memMask):], *ibc.isrc)
+			pad.Store64(i.getScratchpadAddress(f.r[i.Dst]), f.r[i.Src])
 		case VM_NOP: // we do nothing
 		}
 	}
+	return f
 }
 
 type ByteCodeInstructionOp int
@@ -156,9 +166,11 @@ const (
 	VM_IADD_M
 	VM_IADD_MZ
 	VM_ISUB_R
+	VM_ISUB_I
 	VM_ISUB_M
 	VM_ISUB_MZ
 	VM_IMUL_R
+	VM_IMUL_I
 	VM_IMUL_M
 	VM_IMUL_MZ
 	VM_IMULH_R
@@ -167,15 +179,18 @@ const (
 	VM_ISMULH_R
 	VM_ISMULH_M
 	VM_ISMULH_MZ
-	VM_IMUL_RCP
 	VM_INEG_R
 	VM_IXOR_R
+	VM_IXOR_I
 	VM_IXOR_M
 	VM_IXOR_MZ
 	VM_IROR_R
+	VM_IROR_I
 	VM_IROL_R
+	VM_IROL_I
 	VM_ISWAP_R
-	VM_FSWAP_R
+	VM_FSWAP_RF
+	VM_FSWAP_RE
 	VM_FADD_R
 	VM_FADD_M
 	VM_FSUB_R
