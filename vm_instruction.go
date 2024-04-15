@@ -37,8 +37,8 @@ import "encoding/binary"
 
 //reference https://github.com/tevador/RandomX/blob/master/doc/specs.md#51-instruction-encoding
 
-// since go does not have union, use byte array
-type VM_Instruction []byte // it is hardcode 8 bytes
+// VM_Instruction since go does not have union, use byte array
+type VM_Instruction [8]byte // it is hardcode 8 bytes
 
 func (ins VM_Instruction) IMM() uint32 {
 	return binary.LittleEndian.Uint32(ins[4:])
@@ -56,9 +56,9 @@ func (ins VM_Instruction) Opcode() byte {
 	return ins[0]
 }
 
-// CompileToBytecode this will interpret single vm instruction
+// CompileProgramToByteCode this will interpret single vm instruction into executable opcodes
 // reference https://github.com/tevador/RandomX/blob/master/doc/specs.md#52-integer-instructions
-func (vm *VM) CompileToBytecode() {
+func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 
 	var registerUsage [RegistersCount]int
 	for i := range registerUsage {
@@ -66,8 +66,8 @@ func (vm *VM) CompileToBytecode() {
 	}
 
 	for i := 0; i < RANDOMX_PROGRAM_SIZE; i++ {
-		instr := VM_Instruction(vm.Prog[i*8:])
-		ibc := &vm.ByteCode[i]
+		instr := VM_Instruction(prog[i*8:])
+		ibc := &bc[i]
 
 		opcode := instr.Opcode()
 		dst := instr.Dst() % RegistersCount // bit shift optimization
@@ -317,7 +317,7 @@ func (vm *VM) CompileToBytecode() {
 			//conditionmask := CONDITIONMASK << shift
 			ibc.Imm = signExtend2sCompl(instr.IMM()) | (uint64(1) << shift)
 			if CONDITIONOFFSET > 0 || shift > 0 {
-				ibc.Imm &= (^(uint64(1) << (shift - 1)))
+				ibc.Imm &= ^(uint64(1) << (shift - 1))
 			}
 			ibc.MemMask = CONDITIONMASK << shift
 
@@ -348,6 +348,8 @@ func (vm *VM) CompileToBytecode() {
 
 		}
 	}
+
+	return bc
 
 }
 

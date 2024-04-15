@@ -31,9 +31,10 @@ package randomx
 
 import (
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/aes"
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/softfloat"
 	"math"
 	"runtime"
+	"unsafe"
 )
 import "encoding/binary"
 import "golang.org/x/crypto/blake2b"
@@ -45,17 +46,10 @@ type REG struct {
 
 type VM struct {
 	StateStart [64]byte
-	buffer     [RANDOMX_PROGRAM_SIZE*8 + 16*8]byte // first 128 bytes are entropy below rest are program bytes
-	Prog       []byte
 	ScratchPad ScratchPad
 
 	ByteCode ByteCode
 
-	// program configuration  see program.hpp
-
-	entropy [16]uint64
-
-	reg           RegisterFile // the register file
 	mem           MemoryRegisters
 	config        Config // configuration
 	datasetOffset uint64
@@ -66,48 +60,47 @@ type VM struct {
 
 }
 
-func MaskRegisterExponentMantissa(f float64, mode uint64) float64 {
-	return math.Float64frombits((math.Float64bits(f) & dynamicMantissaMask) | mode)
-}
-
 type Config struct {
 	eMask   [2]uint64
 	readReg [4]uint64
 }
 
 // Run calculate hash based on input
-func (vm *VM) Run(inputHash [64]byte) {
+// Warning: Underlying callers will run asm.SetRoundingMode directly
+// It is the caller's responsibility to set and restore the mode to softfloat.RoundingModeToNearest between full executions
+// Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
+func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg RegisterFile) {
 
-	aes.FillAes4Rx4(inputHash, vm.buffer[:])
+	reg.FPRC = roundingMode
 
-	for i := range vm.entropy {
-		vm.entropy[i] = binary.LittleEndian.Uint64(vm.buffer[i*8:])
-	}
+	// buffer first 128 bytes are entropy below rest are program bytes
+	var buffer [16*8 + RANDOMX_PROGRAM_SIZE*8]byte
+	aes.FillAes4Rx4(inputHash, buffer[:])
 
-	vm.Prog = vm.buffer[len(vm.entropy)*8:]
+	entropy := (*[16]uint64)(unsafe.Pointer(&buffer))
 
-	clear(vm.reg.r[:])
+	prog := buffer[len(entropy)*8:]
 
 	// do more initialization before we run
 
-	for i := range vm.entropy[:8] {
-		vm.reg.a[i/2][i%2] = math.Float64frombits(getSmallPositiveFloatBits(vm.entropy[i]))
+	for i := range entropy[:8] {
+		reg.A[i/2][i%2] = softfloat.SmallPositiveFloatBits(entropy[i])
 	}
 
-	vm.mem.ma = vm.entropy[8] & CacheLineAlignMask
-	vm.mem.mx = vm.entropy[10]
+	vm.mem.ma = entropy[8] & CacheLineAlignMask
+	vm.mem.mx = entropy[10]
 
-	addressRegisters := vm.entropy[12]
+	addressRegisters := entropy[12]
 	for i := range vm.config.readReg {
 		vm.config.readReg[i] = uint64(i*2) + (addressRegisters & 1)
 		addressRegisters >>= 1
 	}
 
-	vm.datasetOffset = (vm.entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
-	vm.config.eMask[LOW] = getFloatMask(vm.entropy[14])
-	vm.config.eMask[HIGH] = getFloatMask(vm.entropy[15])
+	vm.datasetOffset = (entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
+	vm.config.eMask[LOW] = softfloat.EMask(entropy[14])
+	vm.config.eMask[HIGH] = softfloat.EMask(entropy[15])
 
-	vm.CompileToBytecode()
+	vm.ByteCode = CompileProgramToByteCode(prog)
 
 	spAddr0 := vm.mem.mx
 	spAddr1 := vm.mem.ma
@@ -115,50 +108,52 @@ func (vm *VM) Run(inputHash [64]byte) {
 	var rlCache RegisterLine
 
 	for ic := 0; ic < RANDOMX_PROGRAM_ITERATIONS; ic++ {
-		spMix := vm.reg.r[vm.config.readReg[0]] ^ vm.reg.r[vm.config.readReg[1]]
+		spMix := reg.R[vm.config.readReg[0]] ^ reg.R[vm.config.readReg[1]]
 
 		spAddr0 ^= spMix
 		spAddr0 &= ScratchpadL3Mask64
 		spAddr1 ^= spMix >> 32
 		spAddr1 &= ScratchpadL3Mask64
 
+		//TODO: optimize these loads!
 		for i := uint64(0); i < RegistersCount; i++ {
-			vm.reg.r[i] ^= vm.ScratchPad.Load64(uint32(spAddr0 + 8*i))
+			reg.R[i] ^= vm.ScratchPad.Load64(uint32(spAddr0 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			vm.reg.f[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*i))
+			reg.F[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			vm.reg.e[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
+			reg.E[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
 
-			vm.reg.e[i][LOW] = MaskRegisterExponentMantissa(vm.reg.e[i][LOW], vm.config.eMask[LOW])
-			vm.reg.e[i][HIGH] = MaskRegisterExponentMantissa(vm.reg.e[i][HIGH], vm.config.eMask[HIGH])
+			reg.E[i][LOW] = softfloat.MaskRegisterExponentMantissa(reg.E[i][LOW], vm.config.eMask[LOW])
+			reg.E[i][HIGH] = softfloat.MaskRegisterExponentMantissa(reg.E[i][HIGH], vm.config.eMask[HIGH])
 		}
 
-		vm.reg = vm.ByteCode.Execute(vm.reg, &vm.ScratchPad, vm.config.eMask)
+		// Run the actual bytecode
+		vm.ByteCode.Execute(&reg, &vm.ScratchPad, vm.config.eMask)
 
-		vm.mem.mx ^= vm.reg.r[vm.config.readReg[2]] ^ vm.reg.r[vm.config.readReg[3]]
+		vm.mem.mx ^= reg.R[vm.config.readReg[2]] ^ reg.R[vm.config.readReg[3]]
 		vm.mem.mx &= CacheLineAlignMask
 
 		vm.Dataset.PrefetchDataset(vm.datasetOffset + vm.mem.mx)
 		// execute diffuser superscalar program to get dataset 64 bytes
-		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &vm.reg.r, &rlCache)
+		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &reg.R, &rlCache)
 
 		// swap the elements
 		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
 
 		for i := uint64(0); i < RegistersCount; i++ {
-			vm.ScratchPad.Store64(uint32(spAddr1+8*i), vm.reg.r[i])
+			vm.ScratchPad.Store64(uint32(spAddr1+8*i), reg.R[i])
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			vm.reg.f[i][LOW] = math.Float64frombits(math.Float64bits(vm.reg.f[i][LOW]) ^ math.Float64bits(vm.reg.e[i][LOW]))
-			vm.reg.f[i][HIGH] = math.Float64frombits(math.Float64bits(vm.reg.f[i][HIGH]) ^ math.Float64bits(vm.reg.e[i][HIGH]))
+			reg.F[i][LOW] = softfloat.Xor(reg.F[i][LOW], reg.E[i][LOW])
+			reg.F[i][HIGH] = softfloat.Xor(reg.F[i][HIGH], reg.E[i][HIGH])
 
-			vm.ScratchPad.Store64(uint32(spAddr0+16*i), math.Float64bits(vm.reg.f[i][LOW]))
-			vm.ScratchPad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(vm.reg.f[i][HIGH]))
+			vm.ScratchPad.Store64(uint32(spAddr0+16*i), math.Float64bits(reg.F[i][LOW]))
+			vm.ScratchPad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(reg.F[i][HIGH]))
 		}
 
 		spAddr0 = 0
@@ -166,56 +161,52 @@ func (vm *VM) Run(inputHash [64]byte) {
 
 	}
 
+	return reg
+
 }
 
 func (vm *VM) InitScratchpad(seed *[64]byte) {
 	vm.ScratchPad.Init(seed)
 }
 
-func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
+func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
+
 	var buf [8]byte
+	hash512, _ := blake2b.New512(nil)
 
 	// Lock thread due to rounding mode flags
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	//restore rounding mode to golang expected one
-	defer asm.SetRoundingMode(asm.RoundingModeToNearest)
 
-	// reset rounding mode if new hash being calculated
-	asm.SetRoundingMode(asm.RoundingModeToNearest)
-
-	tempHash := blake2b.Sum512(input)
-
-	vm.InitScratchpad(&tempHash)
-
-	hash512, _ := blake2b.New512(nil)
+	roundingMode := softfloat.RoundingModeToNearest
 
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
-		vm.Run(tempHash)
+		reg := vm.Run(tempHash, roundingMode)
+		roundingMode = reg.FPRC
 
 		hash512.Reset()
-		for i := range vm.reg.r {
-			binary.LittleEndian.PutUint64(buf[:], vm.reg.r[i])
+		for i := range reg.R {
+			binary.LittleEndian.PutUint64(buf[:], reg.R[i])
 			hash512.Write(buf[:])
 		}
-		for i := range vm.reg.f {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.f[i][LOW]))
+		for i := range reg.F {
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][LOW]))
 			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.f[i][HIGH]))
-			hash512.Write(buf[:])
-		}
-
-		for i := range vm.reg.e {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.e[i][LOW]))
-			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.e[i][HIGH]))
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][HIGH]))
 			hash512.Write(buf[:])
 		}
 
-		for i := range vm.reg.a {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.a[i][LOW]))
+		for i := range reg.E {
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][LOW]))
 			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.a[i][HIGH]))
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][HIGH]))
+			hash512.Write(buf[:])
+		}
+
+		for i := range reg.A {
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.A[i][LOW]))
+			hash512.Write(buf[:])
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.A[i][HIGH]))
 			hash512.Write(buf[:])
 		}
 
@@ -223,7 +214,22 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	}
 
 	// final loop executes here
-	vm.Run(tempHash)
+	reg := vm.Run(tempHash, roundingMode)
+	roundingMode = reg.FPRC
+
+	reg.SetRoundingMode(softfloat.RoundingModeToNearest)
+
+	return reg
+}
+
+func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
+	var buf [8]byte
+
+	tempHash := blake2b.Sum512(input)
+
+	vm.InitScratchpad(&tempHash)
+
+	reg := vm.RunLoops(tempHash)
 
 	// now hash the scratch pad and place into register a
 	aes.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
@@ -232,22 +238,22 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 
 	hash256.Reset()
 
-	for i := range vm.reg.r {
-		binary.LittleEndian.PutUint64(buf[:], vm.reg.r[i])
+	for i := range reg.R {
+		binary.LittleEndian.PutUint64(buf[:], reg.R[i])
 		hash256.Write(buf[:])
 	}
 
-	for i := range vm.reg.f {
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.f[i][LOW]))
+	for i := range reg.F {
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][LOW]))
 		hash256.Write(buf[:])
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.f[i][HIGH]))
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][HIGH]))
 		hash256.Write(buf[:])
 	}
 
-	for i := range vm.reg.e {
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.e[i][LOW]))
+	for i := range reg.E {
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][LOW]))
 		hash256.Write(buf[:])
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(vm.reg.e[i][HIGH]))
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][HIGH]))
 		hash256.Write(buf[:])
 	}
 
@@ -255,26 +261,4 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	hash256.Write(tempHash[:])
 
 	hash256.Sum(output[:0])
-}
-
-const mask22bit = (uint64(1) << 22) - 1
-
-func getSmallPositiveFloatBits(entropy uint64) uint64 {
-	exponent := entropy >> 59 //0..31
-	mantissa := entropy & mantissaMask
-	exponent += exponentBias
-	exponent &= exponentMask
-	exponent = exponent << mantissaSize
-	return exponent | mantissa
-}
-
-func getStaticExponent(entropy uint64) uint64 {
-	exponent := constExponentBits
-	exponent |= (entropy >> (64 - staticExponentBits)) << dynamicExponentBits
-	exponent <<= mantissaSize
-	return exponent
-}
-
-func getFloatMask(entropy uint64) uint64 {
-	return (entropy & mask22bit) | getStaticExponent(entropy)
 }

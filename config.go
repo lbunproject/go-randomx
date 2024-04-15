@@ -29,6 +29,22 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
+import "git.gammaspectra.live/P2Pool/go-randomx/v2/argon2"
+
+// see reference configuration.h
+// Cache size in KiB. Must be a power of 2.
+const RANDOMX_ARGON_MEMORY = 262144
+
+// Number of Argon2d iterations for Cache initialization.
+const RANDOMX_ARGON_ITERATIONS = 3
+
+// Number of parallel lanes for Cache initialization.
+const RANDOMX_ARGON_LANES = 1
+
+// Argon2d salt
+const RANDOMX_ARGON_SALT = "RandomX\x03"
+const ArgonSaltSize uint32 = 8 //sizeof("" RANDOMX_ARGON_SALT) - 1
+
 // Number of random Cache accesses per Dataset item. Minimum is 2.
 const RANDOMX_CACHE_ACCESSES = 8
 
@@ -74,7 +90,7 @@ const ScratchpadSize uint32 = RANDOMX_SCRATCHPAD_L3
 
 const CacheLineAlignMask = (RANDOMX_DATASET_BASE_SIZE - 1) & (^(CacheLineSize - 1))
 
-const CacheSize uint64 = RANDOMX_ARGON_MEMORY * uint64(ArgonBlockSize)
+const CacheSize uint64 = RANDOMX_ARGON_MEMORY * uint64(argon2.BlockSize)
 
 const ScratchpadL1 = RANDOMX_SCRATCHPAD_L1 / 8
 const ScratchpadL2 = RANDOMX_SCRATCHPAD_L2 / 8
@@ -89,16 +105,6 @@ const ScratchpadL3Mask64 = (ScratchpadL3/8 - 1) * 64
 const CONDITIONOFFSET = RANDOMX_JUMP_OFFSET
 const CONDITIONMASK = (1 << RANDOMX_JUMP_BITS) - 1
 const STOREL3CONDITION = 14
-
-const mantissaSize = 52
-const exponentSize = 11
-const mantissaMask = (uint64(1) << mantissaSize) - 1
-const exponentMask = (uint64(1) << exponentSize) - 1
-const exponentBias = 1023
-const dynamicExponentBits = 4
-const staticExponentBits = 4
-const constExponentBits uint64 = 0x300
-const dynamicMantissaMask = (uint64(1) << (mantissaSize + dynamicExponentBits)) - 1
 
 const RANDOMX_FLAG_DEFAULT = uint64(0)
 const RANDOMX_FLAG_JIT = uint64(1 << iota)

@@ -1,6 +1,7 @@
 package randomx
 
 import (
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/argon2"
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/keys"
 	"runtime"
 	"slices"
@@ -66,9 +67,9 @@ func (cache *Randomx_Cache) Init(key []byte) {
 
 	kkey := slices.Clone(key)
 
-	argonBlocks := argon2_buildBlocks(kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
+	argonBlocks := argon2.BuildBlocks(kkey, []byte(RANDOMX_ARGON_SALT), []byte{}, []byte{}, RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES, 0)
 
-	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argonBlock{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))
+	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argon2.Block{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))
 
 	cache.Blocks = memoryBlocks
 

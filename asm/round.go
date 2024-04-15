@@ -1,14 +1,7 @@
 package asm
 
-type RoundingMode uint8
+import "git.gammaspectra.live/P2Pool/go-randomx/v2/softfloat"
 
-const (
-	RoundingModeToNearest = RoundingMode(iota)
-	RoundingModeToNegative
-	RoundingModeToPositive
-	RoundingModeToZero
-)
-
-func SetRoundingMode(mode RoundingMode) {
+func SetRoundingMode(mode softfloat.RoundingMode) {
 	setRoundingMode(uint8(mode))
 }
