@@ -35,7 +35,6 @@ import (
 	"runtime"
 	"unsafe"
 )
-import "encoding/binary"
 import "golang.org/x/crypto/blake2b"
 
 type REG struct {
@@ -65,8 +64,8 @@ type Config struct {
 }
 
 // Run calculate hash based on input
-// Warning: Underlying callers will run asm.SetRoundingMode directly
-// It is the caller's responsibility to set and restore the mode to softfloat64.RoundingModeToNearest between full executions
+// Warning: Underlying callers will run float64 SetRoundingMode directly
+// It is the caller's responsibility to set and restore the mode to IEEE 754 roundTiesToEven between full executions
 // Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
 func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
@@ -169,8 +168,6 @@ func (vm *VM) InitScratchpad(seed *[64]byte) {
 }
 
 func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
-
-	var buf [8]byte
 	hash512, _ := blake2b.New512(nil)
 
 	// Lock thread due to rounding mode flags
@@ -184,30 +181,10 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 		roundingMode = reg.FPRC
 
 		hash512.Reset()
-		for i := range reg.R {
-			binary.LittleEndian.PutUint64(buf[:], reg.R[i])
-			hash512.Write(buf[:])
-		}
-		for i := range reg.F {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][LOW]))
-			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][HIGH]))
-			hash512.Write(buf[:])
-		}
 
-		for i := range reg.E {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][LOW]))
-			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][HIGH]))
-			hash512.Write(buf[:])
-		}
-
-		for i := range reg.A {
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.A[i][LOW]))
-			hash512.Write(buf[:])
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.A[i][HIGH]))
-			hash512.Write(buf[:])
-		}
+		// write R, F, E, A registers
+		hash512.Write(reg.Memory()[:])
+		runtime.KeepAlive(reg)
 
 		hash512.Sum(tempHash[:0])
 	}
@@ -223,8 +200,6 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 }
 
 func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
-	var buf [8]byte
-
 	tempHash := blake2b.Sum512(input)
 
 	vm.InitScratchpad(&tempHash)
@@ -238,24 +213,9 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 
 	hash256.Reset()
 
-	for i := range reg.R {
-		binary.LittleEndian.PutUint64(buf[:], reg.R[i])
-		hash256.Write(buf[:])
-	}
-
-	for i := range reg.F {
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][LOW]))
-		hash256.Write(buf[:])
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.F[i][HIGH]))
-		hash256.Write(buf[:])
-	}
-
-	for i := range reg.E {
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][LOW]))
-		hash256.Write(buf[:])
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(reg.E[i][HIGH]))
-		hash256.Write(buf[:])
-	}
+	// write R, F, E registers
+	hash256.Write(reg.Memory()[:RegisterFileSize-RegistersCountFloat*2*8])
+	runtime.KeepAlive(reg)
 
 	// copy tempHash as it first copied to register and then hashed
 	hash256.Write(tempHash[:])

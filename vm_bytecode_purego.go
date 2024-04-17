@@ -8,8 +8,8 @@ import (
 )
 
 // Execute Runs a RandomX program with the given register file and scratchpad
-// Warning: This will call asm.SetRoundingMode directly
-// It is the caller's responsibility to set and restore the mode to softfloat64.RoundingModeToNearest between full executions
+// Warning: This will call float64 SetRoundingMode directly
+// It is the caller's responsibility to set and restore the mode to IEEE 754 roundTiesToEven between full executions
 // Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
 func (c *ByteCode) Execute(f *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
 	for pc := 0; pc < RANDOMX_PROGRAM_SIZE; pc++ {
