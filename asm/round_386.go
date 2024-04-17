@@ -1,4 +1,4 @@
-//go:build 386
+//go:build 386 && !purego
 
 package asm
 

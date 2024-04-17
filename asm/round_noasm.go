@@ -1,4 +1,4 @@
-//go:build !arm64 && !amd64 && !386
+//go:build (!arm64 && !amd64 && !386) || purego
 
 package asm
 

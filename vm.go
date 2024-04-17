@@ -31,7 +31,6 @@ package randomx
 
 import (
 	"git.gammaspectra.live/P2Pool/go-randomx/v2/aes"
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/softfloat"
 	"math"
 	"runtime"
 	"unsafe"
@@ -67,9 +66,9 @@ type Config struct {
 
 // Run calculate hash based on input
 // Warning: Underlying callers will run asm.SetRoundingMode directly
-// It is the caller's responsibility to set and restore the mode to softfloat.RoundingModeToNearest between full executions
+// It is the caller's responsibility to set and restore the mode to softfloat64.RoundingModeToNearest between full executions
 // Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
-func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg RegisterFile) {
+func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
 	reg.FPRC = roundingMode
 
@@ -84,7 +83,7 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg 
 	// do more initialization before we run
 
 	for i := range entropy[:8] {
-		reg.A[i/2][i%2] = softfloat.SmallPositiveFloatBits(entropy[i])
+		reg.A[i/2][i%2] = SmallPositiveFloatBits(entropy[i])
 	}
 
 	vm.mem.ma = entropy[8] & CacheLineAlignMask
@@ -97,8 +96,8 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg 
 	}
 
 	vm.datasetOffset = (entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
-	vm.config.eMask[LOW] = softfloat.EMask(entropy[14])
-	vm.config.eMask[HIGH] = softfloat.EMask(entropy[15])
+	vm.config.eMask[LOW] = EMask(entropy[14])
+	vm.config.eMask[HIGH] = EMask(entropy[15])
 
 	vm.ByteCode = CompileProgramToByteCode(prog)
 
@@ -127,8 +126,8 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
 			reg.E[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
 
-			reg.E[i][LOW] = softfloat.MaskRegisterExponentMantissa(reg.E[i][LOW], vm.config.eMask[LOW])
-			reg.E[i][HIGH] = softfloat.MaskRegisterExponentMantissa(reg.E[i][HIGH], vm.config.eMask[HIGH])
+			reg.E[i][LOW] = MaskRegisterExponentMantissa(reg.E[i][LOW], vm.config.eMask[LOW])
+			reg.E[i][HIGH] = MaskRegisterExponentMantissa(reg.E[i][HIGH], vm.config.eMask[HIGH])
 		}
 
 		// Run the actual bytecode
@@ -149,8 +148,8 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode softfloat.RoundingMode) (reg 
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			reg.F[i][LOW] = softfloat.Xor(reg.F[i][LOW], reg.E[i][LOW])
-			reg.F[i][HIGH] = softfloat.Xor(reg.F[i][HIGH], reg.E[i][HIGH])
+			reg.F[i][LOW] = Xor(reg.F[i][LOW], reg.E[i][LOW])
+			reg.F[i][HIGH] = Xor(reg.F[i][HIGH], reg.E[i][HIGH])
 
 			vm.ScratchPad.Store64(uint32(spAddr0+16*i), math.Float64bits(reg.F[i][LOW]))
 			vm.ScratchPad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(reg.F[i][HIGH]))
@@ -178,7 +177,7 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	roundingMode := softfloat.RoundingModeToNearest
+	roundingMode := uint8(0)
 
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
 		reg := vm.Run(tempHash, roundingMode)
@@ -217,7 +216,8 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 	reg := vm.Run(tempHash, roundingMode)
 	roundingMode = reg.FPRC
 
-	reg.SetRoundingMode(softfloat.RoundingModeToNearest)
+	//restore rounding mode
+	vm.ByteCode.SetRoundingMode(&reg, 0)
 
 	return reg
 }

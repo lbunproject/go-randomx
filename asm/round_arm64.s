@@ -1,3 +1,5 @@
+//go:build arm64 && !purego
+
 #include "textflag.h"
 
 TEXT ·getFPCR(SB),NOSPLIT,$0-8

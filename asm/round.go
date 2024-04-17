@@ -1,7 +1,5 @@
 package asm
 
-import "git.gammaspectra.live/P2Pool/go-randomx/v2/softfloat"
-
-func SetRoundingMode(mode softfloat.RoundingMode) {
+func SetRoundingMode[T ~uint64 | ~uint8](mode T) {
 	setRoundingMode(uint8(mode))
 }

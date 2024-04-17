@@ -1,3 +1,5 @@
+//go:build amd64 && !purego
+
 #include "textflag.h"
 
 // stmxcsr reads the MXCSR control and status register.

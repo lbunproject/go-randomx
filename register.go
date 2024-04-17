@@ -1,10 +1,5 @@
 package randomx
 
-import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/softfloat"
-)
-
 const RegistersCount = 8
 const RegistersCountFloat = 4
 
@@ -19,15 +14,7 @@ type RegisterFile struct {
 	E [RegistersCountFloat][2]float64
 	A [RegistersCountFloat][2]float64
 
-	FPRC softfloat.RoundingMode
-}
-
-func (f *RegisterFile) SetRoundingMode(mode softfloat.RoundingMode) {
-	if f.FPRC == mode {
-		return
-	}
-	f.FPRC = mode
-	asm.SetRoundingMode(mode)
+	FPRC uint8
 }
 
 type MemoryRegisters struct {

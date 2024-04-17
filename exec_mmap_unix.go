@@ -1,4 +1,4 @@
-//go:build unix && !disable_jit
+//go:build unix && !disable_jit && !purego
 
 package randomx
 

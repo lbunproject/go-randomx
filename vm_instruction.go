@@ -370,13 +370,3 @@ func (pad *ScratchPad) Load64(addr uint32) uint64 {
 func (pad *ScratchPad) Load32(addr uint32) uint32 {
 	return *(*uint32)(unsafe.Pointer(&pad[addr]))
 }
-
-func (pad *ScratchPad) Load32F(addr uint32) (lo, hi float64) {
-	a := *(*[2]int32)(unsafe.Pointer(&pad[addr]))
-	return float64(a[LOW]), float64(a[HIGH])
-}
-
-func (pad *ScratchPad) Load32FA(addr uint32) [2]float64 {
-	a := *(*[2]int32)(unsafe.Pointer(&pad[addr]))
-	return [2]float64{float64(a[LOW]), float64(a[HIGH])}
-}
