@@ -4,6 +4,7 @@ package randomx
 
 import (
 	"golang.org/x/sys/unix"
+	"runtime"
 	"unsafe"
 )
 
@@ -11,10 +12,20 @@ func (f ProgramFunc) Execute(rl *RegisterLine) {
 	if f == nil {
 		panic("program is nil")
 	}
+
+	var reservedStackHack [8 * 8]byte
+	for i := range reservedStackHack {
+		reservedStackHack[i] = uint8(i)
+	}
+
 	memoryPtr := &f
 	fun := *(*func(rl *RegisterLine))(unsafe.Pointer(&memoryPtr))
-
 	fun(rl)
+
+	for i := range reservedStackHack {
+		reservedStackHack[i] = uint8(-i)
+	}
+	runtime.KeepAlive(reservedStackHack)
 }
 
 func (f ProgramFunc) Close() error {
