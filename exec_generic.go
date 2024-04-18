@@ -2,7 +2,7 @@
 
 package randomx
 
-func (f ProgramFunc) Execute(rl *RegisterLine) {
+func (f ProgramFunc) Execute(v uintptr) {
 
 }
 

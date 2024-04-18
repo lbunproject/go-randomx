@@ -107,7 +107,7 @@ func (c *ByteCode) Execute(f *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
 			f.E[i.Dst][HIGH] = softfloat64.Sqrt(f.E[i.Dst][HIGH], softfloat64.RoundingMode(f.FPRC))
 		case VM_CFROUND:
 			tmp := (bits.RotateLeft64(f.R[i.Src], 0-int(i.Imm))) % 4 // rotate right
-			c.SetRoundingMode(f, uint8(tmp))
+			SetRoundingMode(f, uint8(tmp))
 
 		case VM_CBRANCH:
 			f.R[i.Src] += i.Imm
