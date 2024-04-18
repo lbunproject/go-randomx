@@ -2,6 +2,12 @@
 
 package randomx
 
+import (
+	"bytes"
+	"encoding/binary"
+	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
+)
+
 /*
 
 	REGISTER ALLOCATION:
@@ -11,7 +17,7 @@ package randomx
 	; rcx -> temporary
 	; rdx -> temporary
 	; rsi -> scratchpad pointer
-	; rdi -> return address // dataset pointer
+	; rdi -> (not used)
 	; rbp -> (do not use, it's used by Golang sampling) jump target //todo: memory registers "ma" (high 32 bits), "mx" (low 32 bits)
 	; rsp -> stack pointer
 	; r8  -> "r0"
@@ -134,7 +140,7 @@ var CALL = 0xe8
 var REX_ADD_I = []byte{0x49, 0x81}
 var REX_TEST = []byte{0x49, 0xF7}
 var JZ = []byte{0x0f, 0x84}
-var JZ_SHORT = 0x74
+var JZ_SHORT byte = 0x74
 
 var RET byte = 0xc3
 
@@ -151,6 +157,172 @@ var NOP6 = []byte{0x66, 0x0F, 0x1F, 0x44, 0x00, 0x00}
 var NOP7 = []byte{0x0F, 0x1F, 0x80, 0x00, 0x00, 0x00, 0x00}
 var NOP8 = []byte{0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}
 
+var JMP_ALIGN_PREFIX = [14][]byte{
+	{},
+	{0x2E},
+	{0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x90, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x66, 0x90, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x66, 0x66, 0x90, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x0F, 0x1F, 0x40, 0x00, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+	{0x0F, 0x1F, 0x44, 0x00, 0x00, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E, 0x2E},
+}
+
 func genSIB(scale, index, base int) byte {
 	return byte((scale << 6) | (index << 3) | base)
 }
+func genAddressReg(buf []byte, instr *ByteCodeInstruction, rax bool) []byte {
+	buf = append(buf, LEA_32...)
+	if rax {
+		buf = append(buf, 0x80+instr.Src+0)
+	} else {
+		buf = append(buf, 0x80+instr.Src+8)
+	}
+	if instr.Src == RegisterNeedsSib {
+		buf = append(buf, 0x24)
+	}
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(instr.Imm))
+	if rax {
+		buf = append(buf, AND_EAX_I)
+	} else {
+		buf = append(buf, AND_ECX_I...)
+	}
+	buf = binary.LittleEndian.AppendUint32(buf, instr.MemMask)
+	return buf
+}
+
+func valAsString(values ...uint32) []byte {
+	r := make([]byte, 4*len(values))
+	for i, v := range values {
+		dst := r[i*4:]
+		dst[0] = byte(v & 0xff)
+		dst[1] = byte((v >> 8) & 0xff)
+		dst[2] = byte((v >> 16) & 0xff)
+		dst[3] = byte((v >> 24) & 0xff)
+		switch {
+		case dst[0] == 0:
+			return r[:i*4]
+		case dst[1] == 0:
+			return r[:i*4+1]
+		case dst[2] == 0:
+			return r[:i*4+2]
+		case dst[3] == 0:
+			return r[:i*4+3]
+		}
+	}
+	return r
+}
+
+func familyModel(maxFunctionId uint32) (family, model, stepping int) {
+	if maxFunctionId < 0x1 {
+		return 0, 0, 0
+	}
+	eax, _, _, _ := asm.Cpuid(1)
+	// If BaseFamily[3:0] is less than Fh then ExtendedFamily[7:0] is reserved and Family is equal to BaseFamily[3:0].
+	family = int((eax >> 8) & 0xf)
+	extFam := family == 0x6 // Intel is 0x6, needs extended model.
+	if family == 0xf {
+		// Add ExtFamily
+		family += int((eax >> 20) & 0xff)
+		extFam = true
+	}
+	// If BaseFamily[3:0] is less than 0Fh then ExtendedModel[3:0] is reserved and Model is equal to BaseModel[3:0].
+	model = int((eax >> 4) & 0xf)
+	if extFam {
+		// Add ExtModel
+		model += int((eax >> 12) & 0xf0)
+	}
+	stepping = int(eax & 0xf)
+	return family, model, stepping
+}
+
+var BranchesWithin32B = func() bool {
+	a, b, c, d := asm.Cpuid(0)
+	v := string(valAsString(b, d, c))
+
+	if v == "GenuineIntel" {
+		family, model, stepping := familyModel(a)
+
+		// Intel JCC erratum mitigation
+		if family == 6 {
+			// Affected CPU models and stepping numbers are taken from https://www.intel.com/content/dam/support/us/en/documents/processors/mitigations-jump-conditional-code-erratum.pdf
+			return ((model == 0x4E) && (stepping == 0x3)) ||
+				((model == 0x55) && ((stepping == 0x4) || (stepping == 0x7))) ||
+				((model == 0x5E) && (stepping == 0x3)) ||
+				((model == 0x8E) && (stepping >= 0x9) && (stepping <= 0xC)) ||
+				((model == 0x9E) && (stepping >= 0x9) && (stepping <= 0xD)) ||
+				((model == 0xA6) && (stepping == 0x0)) ||
+				((model == 0xAE) && (stepping == 0xA))
+		}
+	}
+	return false
+}()
+
+/*
+;# callee-saved registers - Microsoft x64 calling convention
+push rbx
+push rbp
+push rdi
+push rsi
+push r12
+push r13
+push r14
+push r15
+sub rsp, 80
+movdqu xmmword ptr [rsp+64], xmm6
+movdqu xmmword ptr [rsp+48], xmm7
+movdqu xmmword ptr [rsp+32], xmm8
+movdqu xmmword ptr [rsp+16], xmm9
+movdqu xmmword ptr [rsp+0], xmm10
+sub rsp, 80
+movdqu xmmword ptr [rsp+64], xmm11
+movdqu xmmword ptr [rsp+48], xmm12
+movdqu xmmword ptr [rsp+32], xmm13
+movdqu xmmword ptr [rsp+16], xmm14
+movdqu xmmword ptr [rsp+0], xmm15
+
+;# function arguments
+push rcx                    ;# RegisterFile& registerFile
+mov rbp, qword ptr [rdx]    ;# "mx", "ma"
+mov rdi, qword ptr [rdx+8]  ;# uint8_t* dataset
+mov rsi, r8                 ;# uint8_t* scratchpad
+mov rbx, r9                 ;# loop counter
+
+mov rax, rbp
+ror rbp, 32
+
+;# zero integer registers
+xor r8, r8
+xor r9, r9
+xor r10, r10
+xor r11, r11
+xor r12, r12
+xor r13, r13
+xor r14, r14
+xor r15, r15
+
+;# load constant registers
+lea rcx, [rcx+120]
+movapd xmm8, xmmword ptr [rcx+72]
+movapd xmm9, xmmword ptr [rcx+88]
+movapd xmm10, xmmword ptr [rcx+104]
+movapd xmm11, xmmword ptr [rcx+120]
+
+movapd xmm13, xmmword ptr [mantissaMask]
+movapd xmm14, xmmword ptr [exp240]
+movapd xmm15, xmmword ptr [scaleMask]
+mov rdx, rax
+and eax, RANDOMX_SCRATCHPAD_MASK
+ror rdx, 32
+and edx, RANDOMX_SCRATCHPAD_MASK
+jmp rx_program_loop_begin
+*/
+var randomx_program_prologue = bytes.Repeat(NOP1, 64)
+
+var randomx_program_loop_begin = bytes.Repeat(NOP1, 64)

@@ -31,7 +31,7 @@ type ByteCodeInstruction struct {
 }
 
 func (i ByteCodeInstruction) jumpTarget() int {
-	return int(int16((uint16(i.ImmB) << 8) | uint16(i.Dst)))
+	return int(int16((uint16(i.ImmB) << 8) | uint16(i.Src)))
 }
 
 func (i ByteCodeInstruction) getScratchpadAddress(ptr uint64) uint32 {

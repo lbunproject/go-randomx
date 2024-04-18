@@ -4,7 +4,6 @@ package randomx
 
 import (
 	"encoding/binary"
-	"runtime"
 	"unsafe"
 )
 
@@ -17,21 +16,6 @@ func (f SuperScalarProgramFunc) Execute(rf uintptr) {
 	}
 
 	superscalar_run(rf, uintptr(unsafe.Pointer(unsafe.SliceData(f))))
-	return
-
-	var reservedStackHack [8 * 8]byte
-	for i := range reservedStackHack {
-		reservedStackHack[i] = uint8(i)
-	}
-
-	memoryPtr := &f
-	fun := *(*func(v uintptr))(unsafe.Pointer(&memoryPtr))
-	fun(rf)
-
-	for i := range reservedStackHack {
-		reservedStackHack[i] = uint8(-i)
-	}
-	runtime.KeepAlive(reservedStackHack)
 }
 
 // generateSuperscalarCode
@@ -106,5 +90,5 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgra
 
 	program = append(program, RET)
 
-	return mapProgram(program)
+	return mapProgram(program, len(program))
 }

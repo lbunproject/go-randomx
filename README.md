@@ -8,21 +8,22 @@ This package implements RandomX without CGO, using only Golang code, pure float6
 
 All test cases pass properly.
 
-Uses minimal Go assembly due to having to set rounding mode natively. Native hard float can be added with supporting rounding mode under _asm_.
-
 JIT is supported on a few platforms but can be hard-disabled via the `disable_jit` build flag, or at runtime.
 
 A pure Golang implementation can be used on platforms without hard float support or via the `purego` build flag manually.
 
-|  Platform   | Supported | Hard Float | SuperScalar JIT |      Notes       |
-|:-----------:|:---------:|:----------:|:---------------:|:----------------:|
-|   **386**   |     ✅     |     ✅      |        ❌        |                  |
-|  **amd64**  |     ✅     |     ✅      |       ✅*        | JIT only on Unix |
-|   **arm**   |    ✅*     |     ❌      |        ❌        |                  |
-|  **arm64**  |     ✅     |     ✅      |        ❌        |                  |
-|  **mips**   |    ✅*     |     ❌      |        ❌        |                  |
-| **mips64**  |    ✅*     |     ❌      |        ❌        |                  |
-| **riscv64** |    ✅*     |     ❌      |        ❌        |                  |
-|  **wasm**   |    ✅*     |     ❌      |        ❌        |                  |
+|  Platform   | Hard Float | Hard AES | JIT | Native | purego |      Notes       |
+|:-----------:|:----------:|:--------:|:---:|:------:|:------:|:----------------:|
+|   **386**   |     ✅      |    ❌     |  ❌  |   ✅    |   ✅    |                  |
+|  **amd64**  |     ✅      |    ✅     | ✅*  |   ✅    |   ✅    | JIT only on Unix |
+|   **arm**   |     ❌      |    ❌     |  ❌  |   ❌    |   ✅    |                  |
+|  **arm64**  |     ✅      |    ❌     |  ❌  |   ✅    |   ✅    |                  |
+|  **mips**   |     ❌      |    ❌     |  ❌  |   ❌    |   ✅    |                  |
+| **mips64**  |     ❌      |    ❌     |  ❌  |   ❌    |   ✅    |                  |
+| **riscv64** |     ❌      |    ❌     |  ❌  |   ❌    |   ✅    |                  |
+|  **wasm**   |     ❌      |    ❌     |  ❌  |   ❌    |   ✅    |                  |
 
-&ast; these platforms only support software floating point / purego and will not be performant.
+
+Any platform with no hard float support (soft float using [softfloat64](git.gammaspectra.live/P2Pool/softfloat64)) will be vastly slow.
+
+Native hard float can be added with supporting rounding mode under _asm_.

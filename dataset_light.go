@@ -21,6 +21,10 @@ func (d *Randomx_DatasetLight) ReadDataset(address uint64, r, cache *RegisterLin
 	}
 }
 
+func (d *Randomx_DatasetLight) Flags() uint64 {
+	return d.Cache.Flags
+}
+
 func (d *Randomx_DatasetLight) InitDataset(startItem, endItem uint64) {
 	//d.Cache.initDataset(d.Cache.Programs)
 }

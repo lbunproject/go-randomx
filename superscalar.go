@@ -702,7 +702,10 @@ type Register struct {
 	//RegisterNeedsSib = 4; //x86 r12 register
 }
 
+// RegisterNeedsDisplacement x86 r13 register
 const RegisterNeedsDisplacement = 5
+
+// RegisterNeedsSib x86 r12 register
 const RegisterNeedsSib = 4
 
 func (sins *SuperScalarInstruction) SelectSource(preAllocatedAvailableRegisters []int, cycle int, Registers []Register, gen *Blake2Generator) bool {

@@ -25,6 +25,7 @@ TEXT ·superscalar_run(SB),$0-16
 
     // todo: not supported by golang
     // PREFETCHW 0(SI)
+    PREFETCHT0 0(SI)
 
     // move registers back to register line
     MOVQ R8, 0(SI)

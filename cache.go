@@ -40,11 +40,18 @@ func (cache *Randomx_Cache) HasJIT() bool {
 
 func (cache *Randomx_Cache) VM_Initialize() *VM {
 
-	return &VM{
+	vm := &VM{
 		Dataset: &Randomx_DatasetLight{
 			Cache: cache,
 		},
 	}
+	if cache.HasJIT() {
+		vm.JITProgram = mapProgram(nil, int(RandomXCodeSize))
+		if cache.Flags&RANDOMX_FLAG_SECURE == 0 {
+			mapProgramRWX(vm.JITProgram)
+		}
+	}
+	return vm
 }
 
 func (cache *Randomx_Cache) Close() error {

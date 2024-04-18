@@ -70,7 +70,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 		registerUsage[i] = -1
 	}
 
-	for i := 0; i < RANDOMX_PROGRAM_SIZE; i++ {
+	for i := 0; i < len(bc); i++ {
 		instr := VM_Instruction(prog[i*8:])
 		ibc := &bc[i]
 
@@ -312,10 +312,12 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 
 		case 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238: //25  // CBRANCH and CFROUND are interchanged
 			ibc.Opcode = VM_CBRANCH
-			ibc.Src = instr.Dst() % RegistersCount
+			//TODO:??? it's +1 on other
+			ibc.Dst = instr.Dst() % RegistersCount
 
-			target := uint16(int16(registerUsage[ibc.Src]))
-			ibc.Dst = uint8(target)
+			target := uint16(int16(registerUsage[ibc.Dst]))
+			// set target!
+			ibc.Src = uint8(target)
 			ibc.ImmB = uint8(target >> 8)
 
 			shift := uint64(instr.Mod()>>4) + CONDITIONOFFSET

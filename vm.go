@@ -46,6 +46,8 @@ type VM struct {
 	ScratchPad ScratchPad
 
 	Dataset Randomx_Dataset
+
+	JITProgram VMProgramFunc
 }
 
 // Run calculate hash based on input
@@ -95,6 +97,16 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
 	var rlCache RegisterLine
 
+	if vm.JITProgram != nil {
+		if vm.Dataset.Flags()&RANDOMX_FLAG_SECURE > 0 {
+			mapProgramRW(vm.JITProgram)
+			byteCode.generateCode(vm.JITProgram)
+			mapProgramRX(vm.JITProgram)
+		} else {
+			byteCode.generateCode(vm.JITProgram)
+		}
+	}
+
 	for ic := 0; ic < RANDOMX_PROGRAM_ITERATIONS; ic++ {
 		spMix := reg.R[readReg[0]] ^ reg.R[readReg[1]]
 
@@ -120,7 +132,11 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 		}
 
 		// Run the actual bytecode
-		byteCode.Execute(&reg, &vm.ScratchPad, eMask)
+		if vm.JITProgram != nil {
+			vm.JITProgram.Execute(&reg, &vm.ScratchPad, eMask)
+		} else {
+			byteCode.Execute(&reg, &vm.ScratchPad, eMask)
+		}
 
 		mem.mx ^= reg.R[readReg[2]] ^ reg.R[readReg[3]]
 		mem.mx &= CacheLineAlignMask
@@ -183,9 +199,10 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 
 	// final loop executes here
 	reg := vm.Run(tempHash, roundingMode)
-	roundingMode = reg.FPRC
+	// always force a restore
+	reg.FPRC = 0xff
 
-	//restore rounding mode
+	// restore rounding mode to 0
 	SetRoundingMode(&reg, 0)
 
 	return reg
@@ -213,4 +230,11 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	hash256.Write(tempHash[:])
 
 	hash256.Sum(output[:0])
+}
+
+func (vm *VM) Close() error {
+	if vm.JITProgram != nil {
+		return vm.JITProgram.Close()
+	}
+	return nil
 }

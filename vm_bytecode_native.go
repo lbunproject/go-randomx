@@ -13,7 +13,7 @@ import (
 // It is the caller's responsibility to set and restore the mode to softfloat64.RoundingModeToNearest between full executions
 // Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
 func (c *ByteCode) Execute(f *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
-	for pc := 0; pc < RANDOMX_PROGRAM_SIZE; pc++ {
+	for pc := 0; pc < len(c); pc++ {
 		i := &c[pc]
 		switch i.Opcode {
 		case VM_NOP: // we do nothing
@@ -111,8 +111,8 @@ func (c *ByteCode) Execute(f *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
 			SetRoundingMode(f, uint8(tmp))
 
 		case VM_CBRANCH:
-			f.R[i.Src] += i.Imm
-			if (f.R[i.Src] & uint64(i.MemMask)) == 0 {
+			f.R[i.Dst] += i.Imm
+			if (f.R[i.Dst] & uint64(i.MemMask)) == 0 {
 				pc = i.jumpTarget()
 			}
 		case VM_ISTORE:

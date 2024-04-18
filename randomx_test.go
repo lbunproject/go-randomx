@@ -63,6 +63,7 @@ func Test_Randomx(t *testing.T) {
 			}()
 
 			vm := c.VM_Initialize()
+			defer vm.Close()
 
 			var output_hash [32]byte
 			vm.CalculateHash(tt.input, &output_hash)
@@ -92,6 +93,7 @@ func Benchmark_RandomX(b *testing.B) {
 	}()
 
 	vm := c.VM_Initialize()
+	defer vm.Close()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var output_hash [32]byte
@@ -119,6 +121,7 @@ func Benchmark_RandomXParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var output_hash [32]byte
 		vm := c.VM_Initialize()
+		defer vm.Close()
 
 		for pb.Next() {
 			vm.CalculateHash(tt.input, &output_hash)
