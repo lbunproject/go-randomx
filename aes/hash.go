@@ -57,21 +57,12 @@ func HashAes1Rx4(input []byte, output *[64]byte) {
 	for input_ptr := 0; input_ptr < len(input); input_ptr += 64 {
 		in := (*[4][4]uint32)(unsafe.Pointer(unsafe.SliceData(input[input_ptr:])))
 
-		soft_aesenc(&states[0], &in[0])
-		soft_aesdec(&states[1], &in[1])
-		soft_aesenc(&states[2], &in[2])
-		soft_aesdec(&states[3], &in[3])
+		aesroundtrip_encdec(&states, in)
 	}
 
-	soft_aesenc(&states[0], &keys.AesHash1R_XKeys[0])
-	soft_aesdec(&states[1], &keys.AesHash1R_XKeys[0])
-	soft_aesenc(&states[2], &keys.AesHash1R_XKeys[0])
-	soft_aesdec(&states[3], &keys.AesHash1R_XKeys[0])
+	aesroundtrip_encdec1(&states, &keys.AesHash1R_XKeys[0])
 
-	soft_aesenc(&states[0], &keys.AesHash1R_XKeys[1])
-	soft_aesdec(&states[1], &keys.AesHash1R_XKeys[1])
-	soft_aesenc(&states[2], &keys.AesHash1R_XKeys[1])
-	soft_aesdec(&states[3], &keys.AesHash1R_XKeys[1])
+	aesroundtrip_encdec1(&states, &keys.AesHash1R_XKeys[1])
 
 	copy(output[:], (*[64]byte)(unsafe.Pointer(&states))[:])
 }
@@ -95,13 +86,35 @@ func FillAes1Rx4(state *[64]byte, output []byte) {
 	states := (*[4][4]uint32)(unsafe.Pointer(state))
 
 	for outptr := 0; outptr < len(output); outptr += len(state) {
-		soft_aesdec(&states[0], &keys.AesGenerator1R_Keys[0])
-		soft_aesenc(&states[1], &keys.AesGenerator1R_Keys[1])
-		soft_aesdec(&states[2], &keys.AesGenerator1R_Keys[2])
-		soft_aesenc(&states[3], &keys.AesGenerator1R_Keys[3])
+		aesroundtrip_decenc(states, &keys.AesGenerator1R_Keys)
 
 		copy(output[outptr:], state[:])
 	}
+}
+
+var fillAes4Rx4Keys0 = [4][4]uint32{
+	keys.AesGenerator4R_Keys[0],
+	keys.AesGenerator4R_Keys[0],
+	keys.AesGenerator4R_Keys[4],
+	keys.AesGenerator4R_Keys[4],
+}
+var fillAes4Rx4Keys1 = [4][4]uint32{
+	keys.AesGenerator4R_Keys[1],
+	keys.AesGenerator4R_Keys[1],
+	keys.AesGenerator4R_Keys[5],
+	keys.AesGenerator4R_Keys[5],
+}
+var fillAes4Rx4Keys2 = [4][4]uint32{
+	keys.AesGenerator4R_Keys[2],
+	keys.AesGenerator4R_Keys[2],
+	keys.AesGenerator4R_Keys[6],
+	keys.AesGenerator4R_Keys[6],
+}
+var fillAes4Rx4Keys3 = [4][4]uint32{
+	keys.AesGenerator4R_Keys[3],
+	keys.AesGenerator4R_Keys[3],
+	keys.AesGenerator4R_Keys[7],
+	keys.AesGenerator4R_Keys[7],
 }
 
 // FillAes4Rx4 used to generate final program
@@ -116,25 +129,10 @@ func FillAes4Rx4(state [64]byte, output []byte) {
 	states := (*[4][4]uint32)(unsafe.Pointer(&state))
 
 	for outptr := 0; outptr < len(output); outptr += len(state) {
-		soft_aesdec(&states[0], &keys.AesGenerator4R_Keys[0])
-		soft_aesenc(&states[1], &keys.AesGenerator4R_Keys[0])
-		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[4])
-		soft_aesenc(&states[3], &keys.AesGenerator4R_Keys[4])
-
-		soft_aesdec(&states[0], &keys.AesGenerator4R_Keys[1])
-		soft_aesenc(&states[1], &keys.AesGenerator4R_Keys[1])
-		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[5])
-		soft_aesenc(&states[3], &keys.AesGenerator4R_Keys[5])
-
-		soft_aesdec(&states[0], &keys.AesGenerator4R_Keys[2])
-		soft_aesenc(&states[1], &keys.AesGenerator4R_Keys[2])
-		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[6])
-		soft_aesenc(&states[3], &keys.AesGenerator4R_Keys[6])
-
-		soft_aesdec(&states[0], &keys.AesGenerator4R_Keys[3])
-		soft_aesenc(&states[1], &keys.AesGenerator4R_Keys[3])
-		soft_aesdec(&states[2], &keys.AesGenerator4R_Keys[7])
-		soft_aesenc(&states[3], &keys.AesGenerator4R_Keys[7])
+		aesroundtrip_decenc(states, &fillAes4Rx4Keys0)
+		aesroundtrip_decenc(states, &fillAes4Rx4Keys1)
+		aesroundtrip_decenc(states, &fillAes4Rx4Keys2)
+		aesroundtrip_decenc(states, &fillAes4Rx4Keys3)
 
 		copy(output[outptr:], state[:])
 	}
