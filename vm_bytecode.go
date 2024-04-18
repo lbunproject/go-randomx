@@ -6,6 +6,7 @@ type ByteCodeInstruction struct {
 	Opcode   ByteCodeInstructionOp
 	MemMask  uint32
 	Imm      uint64
+	EMask    uint64
 	/*
 		union {
 			int_reg_t* idst;

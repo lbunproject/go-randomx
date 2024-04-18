@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func (f ProgramFunc) Execute(rl *RegisterLine) {
+func (f ProgramFunc) Execute(v uintptr) {
 	if f == nil {
 		panic("program is nil")
 	}
@@ -19,8 +19,8 @@ func (f ProgramFunc) Execute(rl *RegisterLine) {
 	}
 
 	memoryPtr := &f
-	fun := *(*func(rl *RegisterLine))(unsafe.Pointer(&memoryPtr))
-	fun(rl)
+	fun := *(*func(v uintptr))(unsafe.Pointer(&memoryPtr))
+	fun(v)
 
 	for i := range reservedStackHack {
 		reservedStackHack[i] = uint8(-i)

@@ -43,24 +43,9 @@ type REG struct {
 }
 
 type VM struct {
-	StateStart [64]byte
 	ScratchPad ScratchPad
 
-	ByteCode ByteCode
-
-	mem           MemoryRegisters
-	config        Config // configuration
-	datasetOffset uint64
-
 	Dataset Randomx_Dataset
-
-	Cache *Randomx_Cache // randomx cache
-
-}
-
-type Config struct {
-	eMask   [2]uint64
-	readReg [4]uint64
 }
 
 // Run calculate hash based on input
@@ -85,28 +70,33 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 		reg.A[i/2][i%2] = SmallPositiveFloatBits(entropy[i])
 	}
 
-	vm.mem.ma = entropy[8] & CacheLineAlignMask
-	vm.mem.mx = entropy[10]
+	var mem MemoryRegisters
+
+	mem.ma = entropy[8] & CacheLineAlignMask
+	mem.mx = entropy[10]
 
 	addressRegisters := entropy[12]
-	for i := range vm.config.readReg {
-		vm.config.readReg[i] = uint64(i*2) + (addressRegisters & 1)
+
+	var readReg [4]uint64
+
+	for i := range readReg {
+		readReg[i] = uint64(i*2) + (addressRegisters & 1)
 		addressRegisters >>= 1
 	}
 
-	vm.datasetOffset = (entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
-	vm.config.eMask[LOW] = EMask(entropy[14])
-	vm.config.eMask[HIGH] = EMask(entropy[15])
+	datasetOffset := (entropy[13] % (DATASETEXTRAITEMS + 1)) * CacheLineSize
 
-	vm.ByteCode = CompileProgramToByteCode(prog)
+	eMask := [2]uint64{EMask(entropy[14]), EMask(entropy[15])}
 
-	spAddr0 := vm.mem.mx
-	spAddr1 := vm.mem.ma
+	byteCode := CompileProgramToByteCode(prog)
+
+	spAddr0 := mem.mx
+	spAddr1 := mem.ma
 
 	var rlCache RegisterLine
 
 	for ic := 0; ic < RANDOMX_PROGRAM_ITERATIONS; ic++ {
-		spMix := reg.R[vm.config.readReg[0]] ^ reg.R[vm.config.readReg[1]]
+		spMix := reg.R[readReg[0]] ^ reg.R[readReg[1]]
 
 		spAddr0 ^= spMix
 		spAddr0 &= ScratchpadL3Mask64
@@ -125,22 +115,22 @@ func (vm *VM) Run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 		for i := uint64(0); i < RegistersCountFloat; i++ {
 			reg.E[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
 
-			reg.E[i][LOW] = MaskRegisterExponentMantissa(reg.E[i][LOW], vm.config.eMask[LOW])
-			reg.E[i][HIGH] = MaskRegisterExponentMantissa(reg.E[i][HIGH], vm.config.eMask[HIGH])
+			reg.E[i][LOW] = MaskRegisterExponentMantissa(reg.E[i][LOW], eMask[LOW])
+			reg.E[i][HIGH] = MaskRegisterExponentMantissa(reg.E[i][HIGH], eMask[HIGH])
 		}
 
 		// Run the actual bytecode
-		vm.ByteCode.Execute(&reg, &vm.ScratchPad, vm.config.eMask)
+		byteCode.Execute(&reg, &vm.ScratchPad, eMask)
 
-		vm.mem.mx ^= reg.R[vm.config.readReg[2]] ^ reg.R[vm.config.readReg[3]]
-		vm.mem.mx &= CacheLineAlignMask
+		mem.mx ^= reg.R[readReg[2]] ^ reg.R[readReg[3]]
+		mem.mx &= CacheLineAlignMask
 
-		vm.Dataset.PrefetchDataset(vm.datasetOffset + vm.mem.mx)
+		vm.Dataset.PrefetchDataset(datasetOffset + mem.mx)
 		// execute diffuser superscalar program to get dataset 64 bytes
-		vm.Dataset.ReadDataset(vm.datasetOffset+vm.mem.ma, &reg.R, &rlCache)
+		vm.Dataset.ReadDataset(datasetOffset+mem.ma, &reg.R, &rlCache)
 
 		// swap the elements
-		vm.mem.mx, vm.mem.ma = vm.mem.ma, vm.mem.mx
+		mem.mx, mem.ma = mem.ma, mem.mx
 
 		for i := uint64(0); i < RegistersCount; i++ {
 			vm.ScratchPad.Store64(uint32(spAddr1+8*i), reg.R[i])
@@ -194,7 +184,7 @@ func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 	roundingMode = reg.FPRC
 
 	//restore rounding mode
-	vm.ByteCode.SetRoundingMode(&reg, 0)
+	SetRoundingMode(&reg, 0)
 
 	return reg
 }

@@ -138,7 +138,7 @@ func (cache *Randomx_Cache) InitDatasetItemJIT(rl *RegisterLine, itemNumber uint
 	for i := 0; i < RANDOMX_CACHE_ACCESSES; i++ {
 		mix := cache.GetMixBlock(registerValue)
 
-		cache.JitPrograms[i].Execute(rl)
+		cache.JitPrograms[i].Execute(uintptr(unsafe.Pointer(rl)))
 
 		for q := range rl {
 			rl[q] ^= mix[q]
