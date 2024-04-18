@@ -120,6 +120,8 @@ func (c *ByteCode) Execute(f *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
 	}
 }
 
+const lockThreadDueToRoundingMode = false
+
 func SetRoundingMode(f *RegisterFile, mode uint8) {
 	f.FPRC = mode
 }

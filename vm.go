@@ -160,9 +160,11 @@ func (vm *VM) InitScratchpad(seed *[64]byte) {
 func (vm *VM) RunLoops(tempHash [64]byte) RegisterFile {
 	hash512, _ := blake2b.New512(nil)
 
-	// Lock thread due to rounding mode flags
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	if lockThreadDueToRoundingMode {
+		// Lock thread due to rounding mode flags
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
 
 	roundingMode := uint8(0)
 
@@ -196,7 +198,7 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 
 	reg := vm.RunLoops(tempHash)
 
-	// now hash the scratch pad and place into register a
+	// now hash the scratch pad as it will act as register A
 	aes.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
 
 	hash256, _ := blake2b.New256(nil)
@@ -207,7 +209,7 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	hash256.Write(reg.Memory()[:RegisterFileSize-RegistersCountFloat*2*8])
 	runtime.KeepAlive(reg)
 
-	// copy tempHash as it first copied to register and then hashed
+	// write register A
 	hash256.Write(tempHash[:])
 
 	hash256.Sum(output[:0])
