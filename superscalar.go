@@ -766,8 +766,6 @@ func selectRegister(available_registers []int, gen *Blake2Generator, reg *int) b
 	return true
 }
 
-const Mask = CacheSize/CacheLineSize - 1
-
 // executeSuperscalar execute the superscalar program
 func executeSuperscalar(p []SuperScalarInstruction, r *RegisterLine) {
 
@@ -813,7 +811,7 @@ func randomx_reciprocal(divisor uint32) uint64 {
 	quotient := p2exp63 / uint64(divisor)
 	remainder := p2exp63 % uint64(divisor)
 
-	shift := uint32(bits.Len32(divisor))
+	shift := bits.Len32(divisor)
 
 	return (quotient << shift) + ((remainder << shift) / uint64(divisor))
 }

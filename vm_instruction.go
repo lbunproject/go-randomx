@@ -43,6 +43,11 @@ type VM_Instruction [8]byte // it is hardcode 8 bytes
 func (ins VM_Instruction) IMM() uint32 {
 	return binary.LittleEndian.Uint32(ins[4:])
 }
+
+func (ins VM_Instruction) IMM64() uint64 {
+	return signExtend2sCompl(ins.IMM())
+}
+
 func (ins VM_Instruction) Mod() byte {
 	return ins[3]
 }
@@ -84,13 +89,13 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			} else {
 				//shift
 				ibc.ImmB = (instr.Mod() >> 2) % 4
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 			}
 			registerUsage[dst] = i
 
 		case 16, 17, 18, 19, 20, 21, 22: // 7
 			ibc.Opcode = VM_IADD_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -107,13 +112,13 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			ibc.Opcode = VM_ISUB_R
 
 			if src == dst {
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 				ibc.Opcode = VM_ISUB_I
 			}
 			registerUsage[dst] = i
 		case 39, 40, 41, 42, 43, 44, 45: // 7
 			ibc.Opcode = VM_ISUB_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -130,13 +135,13 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			ibc.Opcode = VM_IMUL_R
 
 			if src == dst {
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 				ibc.Opcode = VM_IMUL_I
 			}
 			registerUsage[dst] = i
 		case 62, 63, 64, 65: //4
 			ibc.Opcode = VM_IMUL_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -154,7 +159,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			registerUsage[dst] = i
 		case 70: //1
 			ibc.Opcode = VM_IMULH_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -172,7 +177,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			registerUsage[dst] = i
 		case 75: //1
 			ibc.Opcode = VM_ISMULH_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -202,13 +207,13 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			ibc.Opcode = VM_IXOR_R
 
 			if src == dst {
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 				ibc.Opcode = VM_IXOR_I
 			}
 			registerUsage[dst] = i
 		case 101, 102, 103, 104, 105: //5
 			ibc.Opcode = VM_IXOR_M
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if src != dst {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask
@@ -224,7 +229,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 		case 106, 107, 108, 109, 110, 111, 112, 113: //8
 			ibc.Opcode = VM_IROR_R
 			if src == dst {
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 				ibc.Opcode = VM_IROR_I
 			}
 			registerUsage[dst] = i
@@ -232,7 +237,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			ibc.Opcode = VM_IROL_R
 
 			if src == dst {
-				ibc.Imm = signExtend2sCompl(instr.IMM())
+				ibc.Imm = instr.IMM64()
 				ibc.Opcode = VM_IROL_I
 			}
 			registerUsage[dst] = i
@@ -269,7 +274,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			} else {
 				ibc.MemMask = ScratchpadL2Mask
 			}
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 
 		case 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160: //16
 			ibc.Dst = instr.Dst() % RegistersCountFloat // bit shift optimization
@@ -283,7 +288,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			} else {
 				ibc.MemMask = ScratchpadL2Mask
 			}
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 
 		case 166, 167, 168, 169, 170, 171: //6
 			ibc.Dst = instr.Dst() % RegistersCountFloat // bit shift optimization
@@ -300,7 +305,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			} else {
 				ibc.MemMask = ScratchpadL2Mask
 			}
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 		case 208, 209, 210, 211, 212, 213: //6
 			ibc.Dst = instr.Dst() % RegistersCountFloat // bit shift optimization
 			ibc.Opcode = VM_FSQRT_R
@@ -315,7 +320,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 
 			shift := uint64(instr.Mod()>>4) + CONDITIONOFFSET
 			//conditionmask := CONDITIONMASK << shift
-			ibc.Imm = signExtend2sCompl(instr.IMM()) | (uint64(1) << shift)
+			ibc.Imm = instr.IMM64() | (uint64(1) << shift)
 			if CONDITIONOFFSET > 0 || shift > 0 {
 				ibc.Imm &= ^(uint64(1) << (shift - 1))
 			}
@@ -331,7 +336,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 
 		case 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255: //16
 			ibc.Opcode = VM_ISTORE
-			ibc.Imm = signExtend2sCompl(instr.IMM())
+			ibc.Imm = instr.IMM64()
 			if (instr.Mod() >> 4) < STOREL3CONDITION {
 				if (instr.Mod() % 4) != 0 {
 					ibc.MemMask = ScratchpadL1Mask

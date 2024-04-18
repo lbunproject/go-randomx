@@ -84,12 +84,12 @@ func (cache *Randomx_Cache) Init(key []byte) {
 
 }
 
+const Mask = CacheSize/CacheLineSize - 1
+
 // GetMixBlock fetch a 64 byte block in uint64 form
 func (cache *Randomx_Cache) GetMixBlock(addr uint64) *RegisterLine {
 
-	mask := CacheSize/CacheLineSize - 1
-
-	addr = (addr & mask) * CacheLineSize
+	addr = (addr & Mask) * CacheLineSize
 
 	block := addr / 1024
 	return cache.Blocks[block].GetLine(addr % 1024)
