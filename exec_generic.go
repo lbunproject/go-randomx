@@ -2,10 +2,6 @@
 
 package randomx
 
-func (f ProgramFunc) Execute(v uintptr) {
-
-}
-
-func (f ProgramFunc) Close() error {
+func (f SuperScalarProgramFunc) Close() error {
 	return nil
 }

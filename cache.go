@@ -12,8 +12,7 @@ type MemoryBlock [128]uint64
 
 func (m *MemoryBlock) GetLine(addr uint64) *RegisterLine {
 	addr >>= 3
-	//[addr : addr+8 : addr+8]
-	return (*RegisterLine)(unsafe.Add(unsafe.Pointer(m), addr*8))
+	return (*RegisterLine)(unsafe.Pointer(unsafe.SliceData(m[addr : addr+8 : addr+8])))
 }
 
 type Randomx_Cache struct {
@@ -21,7 +20,7 @@ type Randomx_Cache struct {
 
 	Programs [RANDOMX_PROGRAM_COUNT]SuperScalarProgram
 
-	JitPrograms [RANDOMX_PROGRAM_COUNT]ProgramFunc
+	JitPrograms [RANDOMX_PROGRAM_COUNT]SuperScalarProgramFunc
 
 	Flags uint64
 }

@@ -2,7 +2,11 @@
 
 package randomx
 
+func (f SuperScalarProgramFunc) Execute(rf uintptr) {
+
+}
+
 // generateSuperscalarCode
-func generateSuperscalarCode(scalarProgram SuperScalarProgram) ProgramFunc {
+func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgramFunc {
 	return nil
 }

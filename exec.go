@@ -1,3 +1,3 @@
 package randomx
 
-type ProgramFunc []byte
+type SuperScalarProgramFunc []byte

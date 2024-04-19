@@ -4,14 +4,40 @@ package randomx
 
 import (
 	"encoding/binary"
+	"runtime"
+	"unsafe"
 )
 
+//go:noescape
+func superscalar_run(rf, jmp uintptr)
+
+func (f SuperScalarProgramFunc) Execute(rf uintptr) {
+	if f == nil {
+		panic("program is nil")
+	}
+
+	superscalar_run(rf, uintptr(unsafe.Pointer(unsafe.SliceData(f))))
+	return
+
+	var reservedStackHack [8 * 8]byte
+	for i := range reservedStackHack {
+		reservedStackHack[i] = uint8(i)
+	}
+
+	memoryPtr := &f
+	fun := *(*func(v uintptr))(unsafe.Pointer(&memoryPtr))
+	fun(rf)
+
+	for i := range reservedStackHack {
+		reservedStackHack[i] = uint8(-i)
+	}
+	runtime.KeepAlive(reservedStackHack)
+}
+
 // generateSuperscalarCode
-func generateSuperscalarCode(scalarProgram SuperScalarProgram) ProgramFunc {
+func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgramFunc {
 
 	var program []byte
-
-	program = append(program, codeInitBlock...)
 
 	p := scalarProgram.Program()
 	for i := range p {
@@ -78,7 +104,7 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) ProgramFunc {
 		}
 	}
 
-	program = append(program, codeRetBlock...)
+	program = append(program, RET)
 
 	return mapProgram(program)
 }
