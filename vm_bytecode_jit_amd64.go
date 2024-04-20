@@ -11,6 +11,114 @@ import (
 //go:noescape
 func vm_run(rf *RegisterFile, pad *ScratchPad, eMask [2]uint64, jmp uintptr)
 
+//go:noescape
+func vm_run_full(rf *RegisterFile, pad *ScratchPad, dataset *RegisterLine, iterations, memoryRegisters uint64, eMask [2]uint64, jmp uintptr)
+
+/*
+#define RANDOMX_DATASET_BASE_SIZE 2147483648
+#define RANDOMX_DATASET_BASE_MASK    (RANDOMX_DATASET_BASE_SIZE-64)
+
+mov ecx, ebp                       ;# ecx = ma
+;#and ecx, RANDOMX_DATASET_BASE_MASK
+and ecx, 2147483584
+xor r8, qword ptr [rdi+rcx]
+ror rbp, 32                        ;# swap "ma" and "mx"
+xor rbp, rax                       ;# modify "mx"
+mov edx, ebp                       ;# edx = mx
+;#and edx, RANDOMX_DATASET_BASE_MASK
+and edx, 2147483584
+prefetchnta byte ptr [rdi+rdx]
+xor r9,  qword ptr [rdi+rcx+8]
+xor r10, qword ptr [rdi+rcx+16]
+xor r11, qword ptr [rdi+rcx+24]
+xor r12, qword ptr [rdi+rcx+32]
+xor r13, qword ptr [rdi+rcx+40]
+xor r14, qword ptr [rdi+rcx+48]
+xor r15, qword ptr [rdi+rcx+56]
+*/
+var programReadDataset = []byte{0x89, 0xE9, 0x81, 0xE1, 0xC0, 0xFF, 0xFF, 0x7F, 0x4C, 0x33, 0x04, 0x0F, 0x48, 0xC1, 0xCD, 0x20, 0x48, 0x31, 0xC5, 0x89, 0xEA, 0x81, 0xE2, 0xC0, 0xFF, 0xFF, 0x7F, 0x0F, 0x18, 0x04, 0x17, 0x4C, 0x33, 0x4C, 0x0F, 0x08, 0x4C, 0x33, 0x54, 0x0F, 0x10, 0x4C, 0x33, 0x5C, 0x0F, 0x18, 0x4C, 0x33, 0x64, 0x0F, 0x20, 0x4C, 0x33, 0x6C, 0x0F, 0x28, 0x4C, 0x33, 0x74, 0x0F, 0x30, 0x4C, 0x33, 0x7C, 0x0F, 0x38}
+
+/*
+lea rcx, [rsi+rax]
+push rcx
+xor r8,  qword ptr [rcx+0]
+xor r9,  qword ptr [rcx+8]
+xor r10, qword ptr [rcx+16]
+xor r11, qword ptr [rcx+24]
+xor r12, qword ptr [rcx+32]
+xor r13, qword ptr [rcx+40]
+xor r14, qword ptr [rcx+48]
+xor r15, qword ptr [rcx+56]
+lea rcx, [rsi+rdx]
+push rcx
+cvtdq2pd xmm0, qword ptr [rcx+0]
+cvtdq2pd xmm1, qword ptr [rcx+8]
+cvtdq2pd xmm2, qword ptr [rcx+16]
+cvtdq2pd xmm3, qword ptr [rcx+24]
+cvtdq2pd xmm4, qword ptr [rcx+32]
+cvtdq2pd xmm5, qword ptr [rcx+40]
+cvtdq2pd xmm6, qword ptr [rcx+48]
+cvtdq2pd xmm7, qword ptr [rcx+56]
+andps xmm4, xmm13
+andps xmm5, xmm13
+andps xmm6, xmm13
+andps xmm7, xmm13
+orps xmm4, xmm14
+orps xmm5, xmm14
+orps xmm6, xmm14
+orps xmm7, xmm14
+*/
+var programLoopLoad = []byte{0x48, 0x8D, 0x0C, 0x06, 0x51, 0x4C, 0x33, 0x01, 0x4C, 0x33, 0x49, 0x08, 0x4C, 0x33, 0x51, 0x10, 0x4C, 0x33, 0x59, 0x18, 0x4C, 0x33, 0x61, 0x20, 0x4C, 0x33, 0x69, 0x28, 0x4C, 0x33, 0x71, 0x30, 0x4C, 0x33, 0x79, 0x38, 0x48, 0x8D, 0x0C, 0x16, 0x51, 0xF3, 0x0F, 0xE6, 0x01, 0xF3, 0x0F, 0xE6, 0x49, 0x08, 0xF3, 0x0F, 0xE6, 0x51, 0x10, 0xF3, 0x0F, 0xE6, 0x59, 0x18, 0xF3, 0x0F, 0xE6, 0x61, 0x20, 0xF3, 0x0F, 0xE6, 0x69, 0x28, 0xF3, 0x0F, 0xE6, 0x71, 0x30, 0xF3, 0x0F, 0xE6, 0x79, 0x38, 0x41, 0x0F, 0x54, 0xE5, 0x41, 0x0F, 0x54, 0xED, 0x41, 0x0F, 0x54, 0xF5, 0x41, 0x0F, 0x54, 0xFD, 0x41, 0x0F, 0x56, 0xE6, 0x41, 0x0F, 0x56, 0xEE, 0x41, 0x0F, 0x56, 0xF6, 0x41, 0x0F, 0x56, 0xFE}
+
+/*
+pop rcx
+mov qword ptr [rcx+0], r8
+mov qword ptr [rcx+8], r9
+mov qword ptr [rcx+16], r10
+mov qword ptr [rcx+24], r11
+mov qword ptr [rcx+32], r12
+mov qword ptr [rcx+40], r13
+mov qword ptr [rcx+48], r14
+mov qword ptr [rcx+56], r15
+pop rcx
+xorpd xmm0, xmm4
+xorpd xmm1, xmm5
+xorpd xmm2, xmm6
+xorpd xmm3, xmm7
+
+movupd xmmword ptr [rcx+0], xmm0
+movupd xmmword ptr [rcx+16], xmm1
+movupd xmmword ptr [rcx+32], xmm2
+movupd xmmword ptr [rcx+48], xmm3
+;#movapd xmmword ptr [rcx+0], xmm0
+;#movapd xmmword ptr [rcx+16], xmm1
+;#movapd xmmword ptr [rcx+32], xmm2
+;#movapd xmmword ptr [rcx+48], xmm3
+*/
+//var programLoopStore = []byte{0x59, 0x4C, 0x89, 0x01, 0x4C, 0x89, 0x49, 0x08, 0x4C, 0x89, 0x51, 0x10, 0x4C, 0x89, 0x59, 0x18, 0x4C, 0x89, 0x61, 0x20, 0x4C, 0x89, 0x69, 0x28, 0x4C, 0x89, 0x71, 0x30, 0x4C, 0x89, 0x79, 0x38, 0x59, 0x66, 0x0F, 0x57, 0xC4, 0x66, 0x0F, 0x57, 0xCD, 0x66, 0x0F, 0x57, 0xD6, 0x66, 0x0F, 0x57, 0xDF, 0x66, 0x0F, 0x29, 0x01, 0x66, 0x0F, 0x29, 0x49, 0x10, 0x66, 0x0F, 0x29, 0x51, 0x20, 0x66, 0x0F, 0x29, 0x59, 0x30}
+var programLoopStore = []byte{0x59, 0x4C, 0x89, 0x01, 0x4C, 0x89, 0x49, 0x08, 0x4C, 0x89, 0x51, 0x10, 0x4C, 0x89, 0x59, 0x18, 0x4C, 0x89, 0x61, 0x20, 0x4C, 0x89, 0x69, 0x28, 0x4C, 0x89, 0x71, 0x30, 0x4C, 0x89, 0x79, 0x38, 0x59, 0x66, 0x0F, 0x57, 0xC4, 0x66, 0x0F, 0x57, 0xCD, 0x66, 0x0F, 0x57, 0xD6, 0x66, 0x0F, 0x57, 0xDF, 0x66, 0x0F, 0x11, 0x01, 0x66, 0x0F, 0x11, 0x49, 0x10, 0x66, 0x0F, 0x11, 0x51, 0x20, 0x66, 0x0F, 0x11, 0x59, 0x30}
+
+/*
+#define RANDOMX_SCRATCHPAD_L3 2097152
+#define RANDOMX_SCRATCHPAD_MASK      (RANDOMX_SCRATCHPAD_L3-64)
+mov rdx, rax
+;#and eax, RANDOMX_SCRATCHPAD_MASK
+and eax, 2097088
+ror rdx, 32
+;#and edx, RANDOMX_SCRATCHPAD_MASK
+and edx, 2097088
+*/
+var programCalculateSpAddrs = []byte{0x48, 0x89, 0xC2, 0x25, 0xC0, 0xFF, 0x1F, 0x00, 0x48, 0xC1, 0xCA, 0x20, 0x81, 0xE2, 0xC0, 0xFF, 0x1F, 0x00}
+
+func (f VMProgramFunc) ExecuteFull(rf *RegisterFile, pad *ScratchPad, dataset *RegisterLine, iterations uint64, ma, mx uint32, eMask [2]uint64) {
+	if f == nil {
+		panic("program is nil")
+	}
+
+	jmpPtr := uintptr(unsafe.Pointer(unsafe.SliceData(f)))
+	vm_run_full(rf, pad, dataset, iterations, (uint64(ma)<<32)|uint64(mx), eMask, jmpPtr)
+}
+
 func (f VMProgramFunc) Execute(rf *RegisterFile, pad *ScratchPad, eMask [2]uint64) {
 	if f == nil {
 		panic("program is nil")
@@ -20,15 +128,22 @@ func (f VMProgramFunc) Execute(rf *RegisterFile, pad *ScratchPad, eMask [2]uint6
 	vm_run(rf, pad, eMask, jmpPtr)
 }
 
-func (c *ByteCode) generateCode(program []byte) {
+func (c *ByteCode) generateCode(program []byte, readReg *[4]uint64) []byte {
 	program = program[:0]
 
+	isFullMode := readReg != nil
+
+	if isFullMode {
+
+		program = append(program, programCalculateSpAddrs...)
+		// prologue
+		program = append(program, programLoopLoad...)
+	}
+
 	var instructionOffsets [RANDOMX_PROGRAM_SIZE]int32
-	var codePos int32
 
 	for ix := range c {
-		instructionOffsets[ix] = codePos
-		curLen := len(program)
+		instructionOffsets[ix] = int32(len(program))
 
 		instr := &c[ix]
 		switch instr.Opcode {
@@ -254,10 +369,10 @@ func (c *ByteCode) generateCode(program []byte) {
 			reg := instr.Dst
 			target := instr.jumpTarget() + 1
 
-			jmpOffset := instructionOffsets[target] - (codePos + 16)
+			jmpOffset := instructionOffsets[target] - (int32(len(program)) + 16)
 
 			if BranchesWithin32B {
-				branchBegin := uint32(codePos + 7)
+				branchBegin := uint32(int32(len(program)) + 7)
 				branchEnd := branchBegin
 				if jmpOffset >= -128 {
 					branchEnd += 9
@@ -305,8 +420,51 @@ func (c *ByteCode) generateCode(program []byte) {
 		case VM_NOP:
 			program = append(program, NOP1...)
 		}
-
-		codePos += int32(len(program) - curLen)
 	}
+
+	if isFullMode {
+		// end of prologue
+		program = append(program, REX_MOV_RR...)
+		program = append(program, 0xc0+byte(readReg[2]))
+		program = append(program, REX_XOR_EAX...)
+		program = append(program, 0xc0+byte(readReg[3]))
+
+		// read dataset
+
+		program = append(program, programReadDataset...)
+
+		// epilogue
+		program = append(program, REX_MOV_RR64...)
+		program = append(program, 0xc0+byte(readReg[0]))
+		program = append(program, REX_XOR_RAX_R64...)
+		program = append(program, 0xc0+byte(readReg[1]))
+		//todo: prefetch scratchpad
+
+		program = append(program, programLoopStore...)
+
+		if BranchesWithin32B {
+			branchBegin := uint32(len(program))
+			branchEnd := branchBegin + 9
+
+			// If the jump crosses or touches 32-byte boundary, align it
+			if (branchBegin ^ branchEnd) >= 32 {
+				alignmentSize := 32 - (branchBegin & 31)
+				if alignmentSize > 8 {
+					program = append(program, NOPX[alignmentSize-9][:alignmentSize-8]...)
+					alignmentSize = 8
+				}
+				program = append(program, NOPX[alignmentSize-1][:alignmentSize]...)
+			}
+		}
+
+		program = append(program, SUB_EBX...)
+		program = append(program, JNZ...)
+		program = binary.LittleEndian.AppendUint32(program, uint32(-len(program)-4))
+		//exit otherwise
+
+	}
+
 	program = append(program, RET)
+
+	return program
 }

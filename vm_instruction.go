@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/aes"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/aes"
 	"unsafe"
 )
 import "encoding/binary"
@@ -63,7 +63,7 @@ func (ins VM_Instruction) Opcode() byte {
 
 // CompileProgramToByteCode this will interpret single vm instruction into executable opcodes
 // reference https://github.com/tevador/RandomX/blob/master/doc/specs.md#52-integer-instructions
-func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
+func CompileProgramToByteCode(prog []byte, bc *ByteCode) {
 
 	var registerUsage [RegistersCount]int
 	for i := range registerUsage {
@@ -194,7 +194,7 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 			divisor := instr.IMM()
 			if !isZeroOrPowerOf2(divisor) {
 				ibc.Opcode = VM_IMUL_I
-				ibc.Imm = randomx_reciprocal(divisor)
+				ibc.Imm = reciprocal(divisor)
 				registerUsage[dst] = i
 			} else {
 				ibc.Opcode = VM_NOP
@@ -355,9 +355,6 @@ func CompileProgramToByteCode(prog []byte) (bc ByteCode) {
 
 		}
 	}
-
-	return bc
-
 }
 
 type ScratchPad [ScratchpadSize]byte

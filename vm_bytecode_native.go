@@ -3,7 +3,7 @@
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/asm"
 	"math"
 	"math/bits"
 )

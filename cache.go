@@ -1,8 +1,9 @@
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/argon2"
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/argon2"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/blake2"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/keys"
 	"runtime"
 	"slices"
 	"unsafe"
@@ -15,7 +16,7 @@ func (m *MemoryBlock) GetLine(addr uint64) *RegisterLine {
 	return (*RegisterLine)(unsafe.Pointer(unsafe.SliceData(m[addr : addr+8 : addr+8])))
 }
 
-type Randomx_Cache struct {
+type Cache struct {
 	Blocks []MemoryBlock
 
 	Programs [RANDOMX_PROGRAM_COUNT]SuperScalarProgram
@@ -25,36 +26,20 @@ type Randomx_Cache struct {
 	Flags uint64
 }
 
-func Randomx_alloc_cache(flags uint64) *Randomx_Cache {
+func NewCache(flags uint64) *Cache {
 	if flags == RANDOMX_FLAG_DEFAULT {
 		flags = RANDOMX_FLAG_JIT
 	}
-	return &Randomx_Cache{
+	return &Cache{
 		Flags: flags,
 	}
 }
 
-func (cache *Randomx_Cache) HasJIT() bool {
+func (cache *Cache) HasJIT() bool {
 	return cache.Flags&RANDOMX_FLAG_JIT > 0 && cache.JitPrograms[0] != nil
 }
 
-func (cache *Randomx_Cache) VM_Initialize() *VM {
-
-	vm := &VM{
-		Dataset: &Randomx_DatasetLight{
-			Cache: cache,
-		},
-	}
-	if cache.HasJIT() {
-		vm.JITProgram = mapProgram(nil, int(RandomXCodeSize))
-		if cache.Flags&RANDOMX_FLAG_SECURE == 0 {
-			mapProgramRWX(vm.JITProgram)
-		}
-	}
-	return vm
-}
-
-func (cache *Randomx_Cache) Close() error {
+func (cache *Cache) Close() error {
 	for _, p := range cache.JitPrograms {
 		if p != nil {
 			err := p.Close()
@@ -66,10 +51,12 @@ func (cache *Randomx_Cache) Close() error {
 	return nil
 }
 
-func (cache *Randomx_Cache) Init(key []byte) {
-	// Lock due to external JIT madness
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+func (cache *Cache) Init(key []byte) {
+	if cache.Flags&RANDOMX_FLAG_JIT > 0 {
+		// Lock due to external JIT madness
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
 
 	kkey := slices.Clone(key)
 
@@ -79,10 +66,11 @@ func (cache *Randomx_Cache) Init(key []byte) {
 
 	cache.Blocks = memoryBlocks
 
-	nonce := uint32(0) //uint32(len(key))
-	gen := Init_Blake2Generator(key, nonce)
+	const nonce uint32 = 0
+
+	gen := blake2.New(key, nonce)
 	for i := 0; i < 8; i++ {
-		cache.Programs[i] = Build_SuperScalar_Program(gen) // build a superscalar program
+		cache.Programs[i] = BuildSuperScalarProgram(gen) // build a superscalar program
 		if cache.Flags&RANDOMX_FLAG_JIT > 0 {
 			cache.JitPrograms[i] = generateSuperscalarCode(cache.Programs[i])
 		}
@@ -93,7 +81,7 @@ func (cache *Randomx_Cache) Init(key []byte) {
 const Mask = CacheSize/CacheLineSize - 1
 
 // GetMixBlock fetch a 64 byte block in uint64 form
-func (cache *Randomx_Cache) GetMixBlock(addr uint64) *RegisterLine {
+func (cache *Cache) GetMixBlock(addr uint64) *RegisterLine {
 
 	addr = (addr & Mask) * CacheLineSize
 
@@ -101,7 +89,7 @@ func (cache *Randomx_Cache) GetMixBlock(addr uint64) *RegisterLine {
 	return cache.Blocks[block].GetLine(addr % 1024)
 }
 
-func (cache *Randomx_Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64) {
+func (cache *Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64) {
 	registerValue := itemNumber
 
 	rl[0] = (itemNumber + 1) * keys.SuperScalar_Constants[0]
@@ -129,7 +117,7 @@ func (cache *Randomx_Cache) InitDatasetItem(rl *RegisterLine, itemNumber uint64)
 	}
 }
 
-func (cache *Randomx_Cache) InitDatasetItemJIT(rl *RegisterLine, itemNumber uint64) {
+func (cache *Cache) InitDatasetItemJIT(rl *RegisterLine, itemNumber uint64) {
 	registerValue := itemNumber
 
 	rl[0] = (itemNumber + 1) * keys.SuperScalar_Constants[0]
@@ -155,9 +143,12 @@ func (cache *Randomx_Cache) InitDatasetItemJIT(rl *RegisterLine, itemNumber uint
 	}
 }
 
-func (cache *Randomx_Cache) initDataset(dataset []RegisterLine, startItem, endItem uint64) {
-	panic("todo")
+func (cache *Cache) InitDataset(dataset []RegisterLine, startItem, endItem uint64) {
 	for itemNumber := startItem; itemNumber < endItem; itemNumber, dataset = itemNumber+1, dataset[1:] {
-		cache.InitDatasetItem(&dataset[0], itemNumber)
+		if cache.HasJIT() {
+			cache.InitDatasetItemJIT(&dataset[0], itemNumber)
+		} else {
+			cache.InitDatasetItem(&dataset[0], itemNumber)
+		}
 	}
 }

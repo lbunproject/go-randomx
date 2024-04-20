@@ -3,16 +3,16 @@
 package asm
 
 //go:noescape
-func aesenc(state *[4]uint32, key *[4]uint32)
+func FillAes1Rx4(states *[4][4]uint32, keys *[4][4]uint32, output *byte, outputLen uint64)
 
 //go:noescape
-func aesdec(state *[4]uint32, key *[4]uint32)
+func HashAes1Rx4(initialState *[4][4]uint32, xKeys *[2][4]uint32, output *[64]byte, input *byte, inputLen uint64)
 
 //go:noescape
-func aesroundtrip_decenc(states *[4][4]uint32, keys *[4][4]uint32)
+func AESRoundTrip_DecEnc(states *[4][4]uint32, keys *[4][4]uint32)
 
 //go:noescape
-func aesroundtrip_encdec(states *[4][4]uint32, keys *[4][4]uint32)
+func AESRoundTrip_EncDec(states *[4][4]uint32, keys *[4][4]uint32)
 
 //go:noescape
-func aesroundtrip_encdec1(states *[4][4]uint32, key *[4]uint32)
+func AESRoundTrip_EncDec1(states *[4][4]uint32, key *[4]uint32)

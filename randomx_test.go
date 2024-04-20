@@ -31,7 +31,9 @@ package randomx
 
 import (
 	"fmt"
+	"os"
 	"runtime"
+	"slices"
 )
 import "testing"
 
@@ -47,9 +49,9 @@ var Tests = []struct {
 	{[]byte("test key 001"), []byte("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"), "e9ff4503201c0c2cca26d285c93ae883f9b1d30c9eb240b820756f2d5a7905fc"}, // test d
 }
 
-func Test_Randomx(t *testing.T) {
+func Test_RandomXLight(t *testing.T) {
 
-	c := Randomx_alloc_cache(0)
+	c := NewCache(0)
 
 	for ix, tt := range Tests {
 
@@ -62,7 +64,10 @@ func Test_Randomx(t *testing.T) {
 				}
 			}()
 
-			vm := c.VM_Initialize()
+			dataset := NewLightDataset(c)
+			dataset.InitDataset(0, DatasetItemCount)
+
+			vm := NewVM(dataset)
 			defer vm.Close()
 
 			var output_hash [32]byte
@@ -74,57 +79,125 @@ func Test_Randomx(t *testing.T) {
 			}
 		})
 	}
-
 }
 
-func Benchmark_RandomX(b *testing.B) {
+func Test_RandomXFull(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping full mode in CI environment")
+	}
+
+	c := NewCache(0)
+
+	for ix, tt := range Tests {
+
+		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
+			c.Init(tt.key)
+			defer func() {
+				err := c.Close()
+				if err != nil {
+					t.Error(err)
+				}
+			}()
+
+			dataset := NewFullDataset(c)
+			if dataset == nil {
+				t.Skip("Skipping full mode in 32-bit environment")
+			}
+			InitDatasetParallel(dataset, runtime.NumCPU())
+
+			vm := NewVM(dataset)
+			defer vm.Close()
+
+			var output_hash [32]byte
+			vm.CalculateHash(tt.input, &output_hash)
+
+			actual := fmt.Sprintf("%x", output_hash)
+			if actual != tt.expected {
+				t.Errorf("#%d Fib(%v): expected %s, actual %s", ix, tt.key, tt.expected, actual)
+			}
+		})
+
+		// cleanup 2GiB between runs
+		runtime.GC()
+	}
+}
+
+var BenchmarkTest = Tests[0]
+var BenchmarkCache *Cache
+var BenchmarkDatasetLight *DatasetLight
+var BenchmarkDatasetFull *DatasetFull
+
+func TestMain(m *testing.M) {
+	if slices.Contains(os.Args, "-test.bench") {
+		//init light and full dataset
+		BenchmarkCache = NewCache(0)
+		BenchmarkCache.Init(BenchmarkTest.key)
+		BenchmarkDatasetLight = NewLightDataset(BenchmarkCache)
+		BenchmarkDatasetLight.InitDataset(0, DatasetItemCount)
+		BenchmarkDatasetFull = NewFullDataset(BenchmarkCache)
+		InitDatasetParallel(BenchmarkDatasetFull, runtime.NumCPU())
+		defer BenchmarkCache.Close()
+	}
+	os.Exit(m.Run())
+}
+
+func Benchmark_RandomXLight(b *testing.B) {
 	b.ReportAllocs()
 
-	tt := Tests[0]
-
-	c := Randomx_alloc_cache(0)
-
-	c.Init(tt.key)
-	defer func() {
-		err := c.Close()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
-
-	vm := c.VM_Initialize()
+	vm := NewVM(BenchmarkDatasetLight)
 	defer vm.Close()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var output_hash [32]byte
-		vm.CalculateHash(tt.input, &output_hash)
+		vm.CalculateHash(BenchmarkTest.input, &output_hash)
 		runtime.KeepAlive(output_hash)
 	}
 }
 
-func Benchmark_RandomXParallel(b *testing.B) {
+func Benchmark_RandomXFull(b *testing.B) {
 	b.ReportAllocs()
 
-	tt := Tests[0]
-
-	c := Randomx_alloc_cache(0)
-
-	c.Init(tt.key)
-	defer func() {
-		err := c.Close()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
+	vm := NewVM(BenchmarkDatasetFull)
+	defer vm.Close()
 
 	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var output_hash [32]byte
+		vm.CalculateHash(BenchmarkTest.input, &output_hash)
+		runtime.KeepAlive(output_hash)
+	}
+}
+
+func Benchmark_RandomXLight_Parallel(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
 	b.RunParallel(func(pb *testing.PB) {
 		var output_hash [32]byte
-		vm := c.VM_Initialize()
+
+		vm := NewVM(BenchmarkDatasetLight)
 		defer vm.Close()
 
 		for pb.Next() {
-			vm.CalculateHash(tt.input, &output_hash)
+			vm.CalculateHash(BenchmarkTest.input, &output_hash)
+			runtime.KeepAlive(output_hash)
+		}
+	})
+}
+
+func Benchmark_RandomXFull_Parallel(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		var output_hash [32]byte
+
+		vm := NewVM(BenchmarkDatasetFull)
+		defer vm.Close()
+
+		for pb.Next() {
+			vm.CalculateHash(BenchmarkTest.input, &output_hash)
 			runtime.KeepAlive(output_hash)
 		}
 	})

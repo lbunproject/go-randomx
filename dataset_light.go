@@ -1,19 +1,25 @@
 package randomx
 
-type Randomx_DatasetLight struct {
-	Cache  *Randomx_Cache
-	Memory []uint64
+type DatasetLight struct {
+	cache *Cache
 }
 
-func (d *Randomx_DatasetLight) PrefetchDataset(address uint64) {
+func NewLightDataset(cache *Cache) *DatasetLight {
+	return &DatasetLight{
+		cache: cache,
+	}
+}
+
+func (d *DatasetLight) PrefetchDataset(address uint64) {
 
 }
 
-func (d *Randomx_DatasetLight) ReadDataset(address uint64, r, cache *RegisterLine) {
-	if d.Cache.HasJIT() {
-		d.Cache.InitDatasetItemJIT(cache, address/CacheLineSize)
+func (d *DatasetLight) ReadDataset(address uint64, r *RegisterLine) {
+	var cache RegisterLine
+	if d.cache.HasJIT() {
+		d.cache.InitDatasetItemJIT(&cache, address/CacheLineSize)
 	} else {
-		d.Cache.InitDatasetItem(cache, address/CacheLineSize)
+		d.cache.InitDatasetItem(&cache, address/CacheLineSize)
 	}
 
 	for i := range r {
@@ -21,10 +27,18 @@ func (d *Randomx_DatasetLight) ReadDataset(address uint64, r, cache *RegisterLin
 	}
 }
 
-func (d *Randomx_DatasetLight) Flags() uint64 {
-	return d.Cache.Flags
+func (d *DatasetLight) Flags() uint64 {
+	return d.cache.Flags
 }
 
-func (d *Randomx_DatasetLight) InitDataset(startItem, endItem uint64) {
-	//d.Cache.initDataset(d.Cache.Programs)
+func (d *DatasetLight) Cache() *Cache {
+	return d.cache
+}
+
+func (d *DatasetLight) Memory() []RegisterLine {
+	return nil
+}
+
+func (d *DatasetLight) InitDataset(startItem, itemCount uint64) {
+
 }

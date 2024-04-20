@@ -3,9 +3,8 @@
 package randomx
 
 import (
-	"bytes"
 	"encoding/binary"
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/asm"
 )
 
 /*
@@ -13,11 +12,11 @@ import (
 	REGISTER ALLOCATION:
 
 	; rax -> temporary
-	; rbx -> iteration counter "ic"
+	; rbx -> todo: iteration counter "ic"
 	; rcx -> temporary
 	; rdx -> temporary
 	; rsi -> scratchpad pointer
-	; rdi -> (not used)
+	; rdi -> todo: dataset pointer
 	; rbp -> (do not use, it's used by Golang sampling) jump target //todo: memory registers "ma" (high 32 bits), "mx" (low 32 bits)
 	; rsp -> stack pointer
 	; r8  -> "r0"
@@ -128,7 +127,7 @@ var REX_MOV_MR = []byte{0x4c, 0x89}
 var REX_XOR_EAX = []byte{0x41, 0x33}
 var SUB_EBX = []byte{0x83, 0xEB, 0x01}
 var JNZ = []byte{0x0f, 0x85}
-var JMP = 0xe9
+var JMP byte = 0xe9
 
 var REX_XOR_RAX_R64 = []byte{0x49, 0x33}
 var REX_XCHG = []byte{0x4d, 0x87}
@@ -156,6 +155,8 @@ var NOP5 = []byte{0x0F, 0x1F, 0x44, 0x00, 0x00}
 var NOP6 = []byte{0x66, 0x0F, 0x1F, 0x44, 0x00, 0x00}
 var NOP7 = []byte{0x0F, 0x1F, 0x80, 0x00, 0x00, 0x00, 0x00}
 var NOP8 = []byte{0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}
+
+var NOPX = [][]byte{NOP1, NOP2, NOP3, NOP4, NOP5, NOP6, NOP7, NOP8}
 
 var JMP_ALIGN_PREFIX = [14][]byte{
 	{},
@@ -263,66 +264,3 @@ var BranchesWithin32B = func() bool {
 	}
 	return false
 }()
-
-/*
-;# callee-saved registers - Microsoft x64 calling convention
-push rbx
-push rbp
-push rdi
-push rsi
-push r12
-push r13
-push r14
-push r15
-sub rsp, 80
-movdqu xmmword ptr [rsp+64], xmm6
-movdqu xmmword ptr [rsp+48], xmm7
-movdqu xmmword ptr [rsp+32], xmm8
-movdqu xmmword ptr [rsp+16], xmm9
-movdqu xmmword ptr [rsp+0], xmm10
-sub rsp, 80
-movdqu xmmword ptr [rsp+64], xmm11
-movdqu xmmword ptr [rsp+48], xmm12
-movdqu xmmword ptr [rsp+32], xmm13
-movdqu xmmword ptr [rsp+16], xmm14
-movdqu xmmword ptr [rsp+0], xmm15
-
-;# function arguments
-push rcx                    ;# RegisterFile& registerFile
-mov rbp, qword ptr [rdx]    ;# "mx", "ma"
-mov rdi, qword ptr [rdx+8]  ;# uint8_t* dataset
-mov rsi, r8                 ;# uint8_t* scratchpad
-mov rbx, r9                 ;# loop counter
-
-mov rax, rbp
-ror rbp, 32
-
-;# zero integer registers
-xor r8, r8
-xor r9, r9
-xor r10, r10
-xor r11, r11
-xor r12, r12
-xor r13, r13
-xor r14, r14
-xor r15, r15
-
-;# load constant registers
-lea rcx, [rcx+120]
-movapd xmm8, xmmword ptr [rcx+72]
-movapd xmm9, xmmword ptr [rcx+88]
-movapd xmm10, xmmword ptr [rcx+104]
-movapd xmm11, xmmword ptr [rcx+120]
-
-movapd xmm13, xmmword ptr [mantissaMask]
-movapd xmm14, xmmword ptr [exp240]
-movapd xmm15, xmmword ptr [scaleMask]
-mov rdx, rax
-and eax, RANDOMX_SCRATCHPAD_MASK
-ror rdx, 32
-and edx, RANDOMX_SCRATCHPAD_MASK
-jmp rx_program_loop_begin
-*/
-var randomx_program_prologue = bytes.Repeat(NOP1, 64)
-
-var randomx_program_loop_begin = bytes.Repeat(NOP1, 64)

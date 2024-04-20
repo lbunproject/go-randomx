@@ -14,17 +14,18 @@ This package implements RandomX without CGO, using only Golang code, native floa
 
 All test cases pass properly.
 
+Supports Full mode and Light mode.
+
 For the C++ implementation and design of RandomX, see [github.com/tevador/RandomX](https://github.com/tevador/RandomX)
 
-|           Feature            | 386 | amd64 | arm | arm64 | mips | mips64 | riscv64 | wasm |
-|:----------------------------:|:---:|:-----:|:---:|:-----:|:----:|:------:|:-------:|:----:|
-|            purego            |  ✅  |   ✅   |  ✅  |   ✅   |  ✅   |   ✅    |    ✅    |  ✅   |
-|  Hardware Float Operations   |  ✅  |   ✅   |  ❌  |   ✅   |  ❌   |   ❌    |    ❌    |  ❌   |
-|   Hardware AES Operations    |  ❌  |   ✅   |  ❌  |   ❌   |  ❌   |   ❌    |    ❌    |  ❌   |
-| Native Superscalar Execution |  ✅  |   ✅   |  ✅  |   ✅   |  ✅   |   ✅    |    ✅    |  ✅   |
-|  Superscalar JIT Execution   |  ❌  |  ✅*   |  ❌  |   ❌   |  ❌   |   ❌    |    ❌    |  ❌   |
-|     Native VM Execution      |  ✅  |   ✅   |  ❌  |   ✅   |  ❌   |   ❌    |    ❌    |  ❌   |
-|       VM JIT Execution       |  ❌  |  ✅*   |  ❌  |   ❌   |  ❌   |   ❌    |    ❌    |  ❌   |
+|        Feature        |    386     |     amd64      |  arm   |   arm64    |  mips  | mips64 | riscv64 |  wasm  |
+|:---------------------:|:----------:|:--------------:|:------:|:----------:|:------:|:------:|:-------:|:------:|
+|        purego         |     ✅      |       ✅        |   ✅    |     ✅      |   ✅    |   ✅    |    ✅    |   ✅    |
+|       Full Mode       |     ❌      |       ✅        |   ❌    |     ✅      |   ❌    |   ✅    |    ✅    |   ❌    |
+|   Float Operations    |     hw     |     **hw**     |  soft  |   **hw**   |  soft  |  soft  |  soft   |  soft  |
+|    AES Operations     |    soft    |     **hw**     |  soft  |    soft    |  soft  |  soft  |  soft   |  soft  |
+| Superscalar Execution |   native   | **native+jit** | native |   native   | native | native | native  | native |
+|     VM Execution      | **native** | **native+jit** |  soft  | **native** |  soft  |  soft  |  soft   |  soft  |
 
 
 A pure Golang implementation can be used on platforms without hard float support or via the `purego` build flag manually.

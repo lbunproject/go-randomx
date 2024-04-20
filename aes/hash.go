@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package aes
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v2/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/keys"
 	"unsafe"
 )
 
@@ -50,21 +50,7 @@ func HashAes1Rx4(input []byte, output *[64]byte) {
 	if len(input)%64 != 0 {
 		panic("unsupported")
 	}
-
-	// states are copied
-	states := keys.AesHash1R_State
-
-	for input_ptr := 0; input_ptr < len(input); input_ptr += 64 {
-		in := (*[4][4]uint32)(unsafe.Pointer(unsafe.SliceData(input[input_ptr:])))
-
-		aesroundtrip_encdec(&states, in)
-	}
-
-	aesroundtrip_encdec1(&states, &keys.AesHash1R_XKeys[0])
-
-	aesroundtrip_encdec1(&states, &keys.AesHash1R_XKeys[1])
-
-	copy(output[:], (*[64]byte)(unsafe.Pointer(&states))[:])
+	hashAes1Rx4(input, output)
 }
 
 // FillAes1Rx4
@@ -81,15 +67,7 @@ func FillAes1Rx4(state *[64]byte, output []byte) {
 	if len(output)%len(state) != 0 {
 		panic("unsupported")
 	}
-
-	// Reference to state without copying
-	states := (*[4][4]uint32)(unsafe.Pointer(state))
-
-	for outptr := 0; outptr < len(output); outptr += len(state) {
-		aesroundtrip_decenc(states, &keys.AesGenerator1R_Keys)
-
-		copy(output[outptr:], state[:])
-	}
+	fillAes1Rx4(state, output)
 }
 
 var fillAes4Rx4Keys0 = [4][4]uint32{

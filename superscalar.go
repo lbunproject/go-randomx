@@ -29,7 +29,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "math/bits"
+import (
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/blake2"
+	"math/bits"
+)
 
 type ExecutionPort byte
 
@@ -201,7 +204,7 @@ var buffer3 = []int{4, 9, 3}
 var buffer4 = []int{4, 4, 4, 4}
 var buffer5 = []int{3, 3, 10}
 
-var Decoder_To_Instruction_Length = [][]int{
+var decoderToInstructionSize = [][]int{
 	buffer0,
 	buffer1,
 	buffer2,
@@ -258,7 +261,7 @@ func (d DecoderType) String() string {
 	}
 }
 
-func FetchNextDecoder(ins *Instruction, cycle int, mulcount int, gen *Blake2Generator) DecoderType {
+func FetchNextDecoder(ins *Instruction, cycle int, mulcount int, gen *blake2.Generator) DecoderType {
 
 	if ins.Opcode == S_IMULH_R || ins.Opcode == S_ISMULH_R {
 		return Decoder3310
@@ -295,158 +298,6 @@ func FetchNextDecoder(ins *Instruction, cycle int, mulcount int, gen *Blake2Gene
 	return Decoder484
 }
 
-var slot3 = []*Instruction{&ISUB_R, &IXOR_R} // 3 length instruction will be filled with these
-var slot3L = []*Instruction{&ISUB_R, &IXOR_R, &IMULH_R, &ISMULH_R}
-
-var slot4 = []*Instruction{&IROR_C, &IADD_RS}
-var slot7 = []*Instruction{&IXOR_C7, &IADD_C7}
-var slot8 = []*Instruction{&IXOR_C8, &IADD_C8}
-var slot9 = []*Instruction{&IXOR_C9, &IADD_C9}
-var slot10 = []*Instruction{&IMUL_RCP}
-
-// SuperScalarInstruction superscalar program is built with superscalar instructions
-type SuperScalarInstruction struct {
-	Opcode           byte
-	Dst              int
-	Src              int
-	Mod              byte
-	Imm32            uint32
-	Imm64            uint64
-	OpGroup          int
-	OpGroupPar       int
-	GroupParIsSource int
-	ins              *Instruction
-	CanReuse         bool
-}
-
-func (sins *SuperScalarInstruction) FixSrcReg() {
-	if sins.Src == 0xff {
-		sins.Src = sins.Dst
-	}
-
-}
-func (sins *SuperScalarInstruction) Reset() {
-	sins.Opcode = 99
-	sins.Src = 0xff
-	sins.Dst = 0xff
-	sins.CanReuse = false
-	sins.GroupParIsSource = 0
-}
-func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator) {
-	sins.Reset()
-	sins.ins = ins
-	sins.OpGroupPar = -1
-	sins.Opcode = ins.Opcode
-
-	switch ins.Opcode {
-	case S_ISUB_R:
-		sins.Mod = 0
-		sins.Imm32 = 0
-		sins.OpGroup = S_IADD_RS
-		sins.GroupParIsSource = 1
-	case S_IXOR_R:
-		sins.Mod = 0
-		sins.Imm32 = 0
-		sins.OpGroup = S_IXOR_R
-		sins.GroupParIsSource = 1
-	case S_IADD_RS:
-		sins.Mod = gen.GetByte()
-		// set modshift on Imm32
-		sins.Imm32 = uint32((sins.Mod >> 2) % 4) // bits 2-3
-		//sins.Imm32 = 0
-		sins.OpGroup = S_IADD_RS
-		sins.GroupParIsSource = 1
-	case S_IMUL_R:
-		sins.Mod = 0
-		sins.Imm32 = 0
-		sins.OpGroup = S_IMUL_R
-		sins.GroupParIsSource = 1
-	case S_IROR_C:
-		sins.Mod = 0
-
-		for sins.Imm32 = 0; sins.Imm32 == 0; {
-			sins.Imm32 = uint32(gen.GetByte() & 63)
-		}
-
-		sins.OpGroup = S_IROR_C
-		sins.OpGroupPar = -1
-	case S_IADD_C7, S_IADD_C8, S_IADD_C9:
-		sins.Mod = 0
-		sins.Imm32 = gen.GetUint32()
-		sins.OpGroup = S_IADD_C7
-		sins.OpGroupPar = -1
-	case S_IXOR_C7, S_IXOR_C8, S_IXOR_C9:
-		sins.Mod = 0
-		sins.Imm32 = gen.GetUint32()
-		sins.OpGroup = S_IXOR_C7
-		sins.OpGroupPar = -1
-
-	case S_IMULH_R:
-		sins.CanReuse = true
-		sins.Mod = 0
-		sins.Imm32 = 0
-		sins.OpGroup = S_IMULH_R
-		sins.OpGroupPar = int(gen.GetUint32())
-	case S_ISMULH_R:
-		sins.CanReuse = true
-		sins.Mod = 0
-		sins.Imm32 = 0
-		sins.OpGroup = S_ISMULH_R
-		sins.OpGroupPar = int(gen.GetUint32())
-
-	case S_IMUL_RCP:
-
-		sins.Mod = 0
-		for {
-			sins.Imm32 = gen.GetUint32()
-			if (sins.Imm32&sins.Imm32 - 1) != 0 {
-				break
-			}
-		}
-
-		sins.Imm64 = randomx_reciprocal(sins.Imm32)
-
-		sins.OpGroup = S_IMUL_RCP
-
-	default:
-		panic("should not occur")
-
-	}
-
-}
-func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Generator, instruction_len int, decoder_type int, islast, isfirst bool) {
-
-	switch instruction_len {
-	case 3:
-		if islast {
-			create(sins, slot3L[gen.GetByte()&3], gen)
-		} else {
-			create(sins, slot3[gen.GetByte()&1], gen)
-		}
-	case 4:
-		//if this is the 4-4-4-4 buffer, issue multiplications as the first 3 instructions
-		if decoder_type == int(Decoder4444) && !islast {
-			create(sins, &IMUL_R, gen)
-		} else {
-			create(sins, slot4[gen.GetByte()&1], gen)
-		}
-	case 7:
-		create(sins, slot7[gen.GetByte()&1], gen)
-
-	case 8:
-		create(sins, slot8[gen.GetByte()&1], gen)
-
-	case 9:
-		create(sins, slot9[gen.GetByte()&1], gen)
-	case 10:
-		create(sins, slot10[0], gen)
-
-	default:
-		panic("should not be possible")
-	}
-
-}
-
 type SuperScalarProgram []SuperScalarInstruction
 
 func (p SuperScalarProgram) setAddressRegister(addressRegister int) {
@@ -460,7 +311,7 @@ func (p SuperScalarProgram) Program() []SuperScalarInstruction {
 	return p[1:]
 }
 
-func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
+func BuildSuperScalarProgram(gen *blake2.Generator) SuperScalarProgram {
 	cycle := 0
 	depcycle := 0
 	//retire_cycle := 0
@@ -474,12 +325,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 	code_size := 0
 	program := make(SuperScalarProgram, 1, 512)
 
-	preAllocatedRegisters := gen.allocRegIndex[:]
-
-	registers := gen.allocRegisters[:]
-	for i := range registers {
-		registers[i] = Register{}
-	}
+	var registers [8]Register
 
 	sins := &SuperScalarInstruction{}
 	sins.ins = &Instruction{Opcode: S_NOP}
@@ -508,7 +354,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 				if ports_saturated || program_size >= SuperscalarMaxSize {
 					break
 				}
-				CreateSuperScalarInstruction(sins, gen, Decoder_To_Instruction_Length[int(decoder)][buffer_index], int(decoder), len(Decoder_To_Instruction_Length[decoder]) == (buffer_index+1), buffer_index == 0)
+				CreateSuperScalarInstruction(sins, gen, decoderToInstructionSize[decoder][buffer_index], decoder, len(decoderToInstructionSize[decoder]) == (buffer_index+1), buffer_index == 0)
 				macro_op_index = 0
 
 			}
@@ -529,7 +375,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 
 			if macro_op_index == sins.ins.SrcOP { // FIXME
 				forward := 0
-				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectSource(preAllocatedRegisters, scheduleCycle, registers, gen); forward++ {
+				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectSource(scheduleCycle, &registers, gen); forward++ {
 					scheduleCycle++
 					cycle++
 				}
@@ -547,7 +393,7 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 
 			if macro_op_index == sins.ins.DstOP { // FIXME
 				forward := 0
-				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectDestination(preAllocatedRegisters, scheduleCycle, throwAwayCount > 0, registers, gen); forward++ {
+				for ; forward < LOOK_FORWARD_CYCLES && !sins.SelectDestination(scheduleCycle, throwAwayCount > 0, &registers, gen); forward++ {
 					scheduleCycle++
 					cycle++
 				}
@@ -708,24 +554,24 @@ const RegisterNeedsDisplacement = 5
 // RegisterNeedsSib x86 r12 register
 const RegisterNeedsSib = 4
 
-func (sins *SuperScalarInstruction) SelectSource(preAllocatedAvailableRegisters []int, cycle int, Registers []Register, gen *Blake2Generator) bool {
-	available_registers := preAllocatedAvailableRegisters[:0]
+func (sins *SuperScalarInstruction) SelectSource(cycle int, registers *[8]Register, gen *blake2.Generator) bool {
+	availableRegisters := make([]int, 0, 8)
 
-	for i := range Registers {
-		if Registers[i].Latency <= cycle {
-			available_registers = append(available_registers, i)
+	for i := range registers {
+		if registers[i].Latency <= cycle {
+			availableRegisters = append(availableRegisters, i)
 		}
 	}
 
-	if len(available_registers) == 2 && sins.Opcode == S_IADD_RS {
-		if available_registers[0] == RegisterNeedsDisplacement || available_registers[1] == RegisterNeedsDisplacement {
+	if len(availableRegisters) == 2 && sins.Opcode == S_IADD_RS {
+		if availableRegisters[0] == RegisterNeedsDisplacement || availableRegisters[1] == RegisterNeedsDisplacement {
 			sins.Src = RegisterNeedsDisplacement
 			sins.OpGroupPar = sins.Src
 			return true
 		}
 	}
 
-	if selectRegister(available_registers, gen, &sins.Src) {
+	if selectRegister(availableRegisters, gen, &sins.Src) {
 
 		if sins.GroupParIsSource == 0 {
 
@@ -737,35 +583,35 @@ func (sins *SuperScalarInstruction) SelectSource(preAllocatedAvailableRegisters 
 	return false
 }
 
-func (sins *SuperScalarInstruction) SelectDestination(preAllocatedAvailableRegisters []int, cycle int, allowChainedMul bool, Registers []Register, gen *Blake2Generator) bool {
-	preAllocatedAvailableRegisters = preAllocatedAvailableRegisters[:0]
+func (sins *SuperScalarInstruction) SelectDestination(cycle int, allowChainedMul bool, Registers *[8]Register, gen *blake2.Generator) bool {
+	var availableRegisters = make([]int, 0, 8)
 
 	for i := range Registers {
 		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src) &&
 			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R) &&
 			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar) &&
 			(sins.Opcode != S_IADD_RS || i != RegisterNeedsDisplacement) {
-			preAllocatedAvailableRegisters = append(preAllocatedAvailableRegisters, i)
+			availableRegisters = append(availableRegisters, i)
 		}
 	}
 
-	return selectRegister(preAllocatedAvailableRegisters, gen, &sins.Dst)
+	return selectRegister(availableRegisters, gen, &sins.Dst)
 }
 
-func selectRegister(available_registers []int, gen *Blake2Generator, reg *int) bool {
+func selectRegister(availableRegisters []int, gen *blake2.Generator, reg *int) bool {
 	index := 0
-	if len(available_registers) == 0 {
+	if len(availableRegisters) == 0 {
 		return false
 	}
 
-	if len(available_registers) > 1 {
+	if len(availableRegisters) > 1 {
 		tmp := gen.GetUint32()
 
-		index = int(tmp % uint32(len(available_registers)))
+		index = int(tmp % uint32(len(availableRegisters)))
 	} else {
 		index = 0
 	}
-	*reg = available_registers[index]
+	*reg = availableRegisters[index]
 	return true
 }
 
@@ -798,27 +644,4 @@ func executeSuperscalar(p []SuperScalarInstruction, r *RegisterLine) {
 		}
 	}
 
-}
-
-func smulh(a, b int64) uint64 {
-	hi_, _ := bits.Mul64(uint64(a), uint64(b))
-	t1 := (a >> 63) & b
-	t2 := (b >> 63) & a
-	return uint64(int64(hi_) - t1 - t2)
-}
-
-func randomx_reciprocal(divisor uint32) uint64 {
-
-	const p2exp63 = uint64(1) << 63
-
-	quotient := p2exp63 / uint64(divisor)
-	remainder := p2exp63 % uint64(divisor)
-
-	shift := bits.Len32(divisor)
-
-	return (quotient << shift) + ((remainder << shift) / uint64(divisor))
-}
-
-func signExtend2sCompl(x uint32) uint64 {
-	return uint64(int64(int32(x)))
 }
