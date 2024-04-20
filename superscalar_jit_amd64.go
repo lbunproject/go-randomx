@@ -27,8 +27,8 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgra
 	for i := range p {
 		instr := &p[i]
 
-		dst := instr.Dst_Reg % RegistersCount
-		src := instr.Src_Reg % RegistersCount
+		dst := instr.Dst % RegistersCount
+		src := instr.Src % RegistersCount
 
 		switch instr.Opcode {
 		case S_ISUB_R:
@@ -80,9 +80,9 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgra
 			program = append(program, byte(0xc2+8*dst))
 		case S_IMUL_RCP:
 			program = append(program, MOV_RAX_I...)
-			program = binary.LittleEndian.AppendUint64(program, randomx_reciprocal(instr.Imm32))
+			program = binary.LittleEndian.AppendUint64(program, instr.Imm64)
 			program = append(program, REX_IMUL_RM...)
-			program = append(program, byte(0xc0+8*instr.Dst_Reg))
+			program = append(program, byte(0xc0+8*instr.Dst))
 		default:
 			panic("unreachable")
 		}

@@ -307,11 +307,11 @@ var slot10 = []*Instruction{&IMUL_RCP}
 // SuperScalarInstruction superscalar program is built with superscalar instructions
 type SuperScalarInstruction struct {
 	Opcode           byte
-	Dst_Reg          int
-	Src_Reg          int
+	Dst              int
+	Src              int
 	Mod              byte
 	Imm32            uint32
-	Type             int
+	Imm64            uint64
 	OpGroup          int
 	OpGroupPar       int
 	GroupParIsSource int
@@ -320,17 +320,15 @@ type SuperScalarInstruction struct {
 }
 
 func (sins *SuperScalarInstruction) FixSrcReg() {
-	if sins.Src_Reg >= 0 {
-		// do nothing
-	} else {
-		sins.Src_Reg = sins.Dst_Reg
+	if sins.Src == 0xff {
+		sins.Src = sins.Dst
 	}
 
 }
 func (sins *SuperScalarInstruction) Reset() {
 	sins.Opcode = 99
-	sins.Src_Reg = -1
-	sins.Dst_Reg = -1
+	sins.Src = 0xff
+	sins.Dst = 0xff
 	sins.CanReuse = false
 	sins.GroupParIsSource = 0
 }
@@ -406,6 +404,8 @@ func create(sins *SuperScalarInstruction, ins *Instruction, gen *Blake2Generator
 			}
 		}
 
+		sins.Imm64 = randomx_reciprocal(sins.Imm32)
+
 		sins.OpGroup = S_IMUL_RCP
 
 	default:
@@ -450,11 +450,11 @@ func CreateSuperScalarInstruction(sins *SuperScalarInstruction, gen *Blake2Gener
 type SuperScalarProgram []SuperScalarInstruction
 
 func (p SuperScalarProgram) setAddressRegister(addressRegister int) {
-	p[0].Dst_Reg = addressRegister
+	p[0].Dst = addressRegister
 }
 
 func (p SuperScalarProgram) AddressRegister() int {
-	return p[0].Dst_Reg
+	return p[0].Dst
 }
 func (p SuperScalarProgram) Program() []SuperScalarInstruction {
 	return p[1:]
@@ -569,9 +569,9 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 			depcycle = scheduleCycle + mop.GetLatency() // calculate when will the result be ready
 
 			if macro_op_index == sins.ins.ResultOP { // fix me
-				registers[sins.Dst_Reg].Latency = depcycle
-				registers[sins.Dst_Reg].LastOpGroup = sins.OpGroup
-				registers[sins.Dst_Reg].LastOpPar = sins.OpGroupPar
+				registers[sins.Dst].Latency = depcycle
+				registers[sins.Dst].LastOpGroup = sins.OpGroup
+				registers[sins.Dst].LastOpPar = sins.OpGroupPar
 
 			}
 
@@ -609,12 +609,12 @@ func Build_SuperScalar_Program(gen *Blake2Generator) SuperScalarProgram {
 		if i == 0 {
 			continue
 		}
-		lastdst := asic_latencies[program[i].Dst_Reg] + 1
+		lastdst := asic_latencies[program[i].Dst] + 1
 		lastsrc := 0
-		if program[i].Dst_Reg != program[i].Src_Reg {
-			lastsrc = asic_latencies[program[i].Src_Reg] + 1
+		if program[i].Dst != program[i].Src {
+			lastsrc = asic_latencies[program[i].Src] + 1
 		}
-		asic_latencies[program[i].Dst_Reg] = max(lastdst, lastsrc)
+		asic_latencies[program[i].Dst] = max(lastdst, lastsrc)
 	}
 
 	asic_latency_max := 0
@@ -719,18 +719,18 @@ func (sins *SuperScalarInstruction) SelectSource(preAllocatedAvailableRegisters 
 
 	if len(available_registers) == 2 && sins.Opcode == S_IADD_RS {
 		if available_registers[0] == RegisterNeedsDisplacement || available_registers[1] == RegisterNeedsDisplacement {
-			sins.Src_Reg = RegisterNeedsDisplacement
-			sins.OpGroupPar = sins.Src_Reg
+			sins.Src = RegisterNeedsDisplacement
+			sins.OpGroupPar = sins.Src
 			return true
 		}
 	}
 
-	if selectRegister(available_registers, gen, &sins.Src_Reg) {
+	if selectRegister(available_registers, gen, &sins.Src) {
 
 		if sins.GroupParIsSource == 0 {
 
 		} else {
-			sins.OpGroupPar = sins.Src_Reg
+			sins.OpGroupPar = sins.Src
 		}
 		return true
 	}
@@ -741,7 +741,7 @@ func (sins *SuperScalarInstruction) SelectDestination(preAllocatedAvailableRegis
 	preAllocatedAvailableRegisters = preAllocatedAvailableRegisters[:0]
 
 	for i := range Registers {
-		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src_Reg) &&
+		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src) &&
 			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R) &&
 			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar) &&
 			(sins.Opcode != S_IADD_RS || i != RegisterNeedsDisplacement) {
@@ -749,7 +749,7 @@ func (sins *SuperScalarInstruction) SelectDestination(preAllocatedAvailableRegis
 		}
 	}
 
-	return selectRegister(preAllocatedAvailableRegisters, gen, &sins.Dst_Reg)
+	return selectRegister(preAllocatedAvailableRegisters, gen, &sins.Dst)
 }
 
 func selectRegister(available_registers []int, gen *Blake2Generator, reg *int) bool {
@@ -776,25 +776,25 @@ func executeSuperscalar(p []SuperScalarInstruction, r *RegisterLine) {
 		ins := &p[i]
 		switch ins.Opcode {
 		case S_ISUB_R:
-			r[ins.Dst_Reg] -= r[ins.Src_Reg]
+			r[ins.Dst] -= r[ins.Src]
 		case S_IXOR_R:
-			r[ins.Dst_Reg] ^= r[ins.Src_Reg]
+			r[ins.Dst] ^= r[ins.Src]
 		case S_IADD_RS:
-			r[ins.Dst_Reg] += r[ins.Src_Reg] << ins.Imm32
+			r[ins.Dst] += r[ins.Src] << ins.Imm32
 		case S_IMUL_R:
-			r[ins.Dst_Reg] *= r[ins.Src_Reg]
+			r[ins.Dst] *= r[ins.Src]
 		case S_IROR_C:
-			r[ins.Dst_Reg] = bits.RotateLeft64(r[ins.Dst_Reg], 0-int(ins.Imm32))
+			r[ins.Dst] = bits.RotateLeft64(r[ins.Dst], 0-int(ins.Imm32))
 		case S_IADD_C7, S_IADD_C8, S_IADD_C9:
-			r[ins.Dst_Reg] += signExtend2sCompl(ins.Imm32)
+			r[ins.Dst] += signExtend2sCompl(ins.Imm32)
 		case S_IXOR_C7, S_IXOR_C8, S_IXOR_C9:
-			r[ins.Dst_Reg] ^= signExtend2sCompl(ins.Imm32)
+			r[ins.Dst] ^= signExtend2sCompl(ins.Imm32)
 		case S_IMULH_R:
-			r[ins.Dst_Reg], _ = bits.Mul64(r[ins.Dst_Reg], r[ins.Src_Reg])
+			r[ins.Dst], _ = bits.Mul64(r[ins.Dst], r[ins.Src])
 		case S_ISMULH_R:
-			r[ins.Dst_Reg] = smulh(int64(r[ins.Dst_Reg]), int64(r[ins.Src_Reg]))
+			r[ins.Dst] = smulh(int64(r[ins.Dst]), int64(r[ins.Src]))
 		case S_IMUL_RCP:
-			r[ins.Dst_Reg] *= randomx_reciprocal(ins.Imm32)
+			r[ins.Dst] *= ins.Imm64
 		}
 	}
 
