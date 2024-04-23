@@ -11,6 +11,16 @@ type Dataset interface {
 	Memory() []RegisterLine
 }
 
+func NewDataset(cache *Cache) Dataset {
+	if cache.Flags&RANDOMX_FLAG_FULL_MEM > 0 {
+		if ds := NewFullDataset(cache); ds != nil {
+			return ds
+		}
+		return nil
+	}
+	return NewLightDataset(cache)
+}
+
 func InitDatasetParallel(dataset Dataset, n int) {
 	n = max(1, n)
 
