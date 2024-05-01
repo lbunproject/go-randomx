@@ -27,7 +27,7 @@ func (d *DatasetLight) ReadDataset(address uint64, r *RegisterLine) {
 	}
 }
 
-func (d *DatasetLight) Flags() uint64 {
+func (d *DatasetLight) Flags() Flag {
 	return d.cache.Flags
 }
 

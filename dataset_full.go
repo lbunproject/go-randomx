@@ -33,7 +33,7 @@ func (d *DatasetFull) Cache() *Cache {
 	return d.cache
 }
 
-func (d *DatasetFull) Flags() uint64 {
+func (d *DatasetFull) Flags() Flag {
 	return d.cache.Flags
 }
 

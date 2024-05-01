@@ -29,3 +29,24 @@ func soft_aesdec(state *[4]uint32, key *[4]uint32) {
 	state[2] = key[2] ^ td0[uint8(s2)] ^ td1[uint8(s1>>8)] ^ td2[uint8(s0>>16)] ^ td3[uint8(s3>>24)]
 	state[3] = key[3] ^ td0[uint8(s3)] ^ td1[uint8(s2>>8)] ^ td2[uint8(s1>>16)] ^ td3[uint8(s0>>24)]
 }
+
+func soft_aesroundtrip_decenc(states *[4][4]uint32, keys *[4][4]uint32) {
+	soft_aesdec(&states[0], &keys[0])
+	soft_aesenc(&states[1], &keys[1])
+	soft_aesdec(&states[2], &keys[2])
+	soft_aesenc(&states[3], &keys[3])
+}
+
+func soft_aesroundtrip_encdec(states *[4][4]uint32, keys *[4][4]uint32) {
+	soft_aesenc(&states[0], &keys[0])
+	soft_aesdec(&states[1], &keys[1])
+	soft_aesenc(&states[2], &keys[2])
+	soft_aesdec(&states[3], &keys[3])
+}
+
+func soft_aesroundtrip_encdec1(states *[4][4]uint32, key *[4]uint32) {
+	soft_aesenc(&states[0], key)
+	soft_aesdec(&states[1], key)
+	soft_aesenc(&states[2], key)
+	soft_aesdec(&states[3], key)
+}

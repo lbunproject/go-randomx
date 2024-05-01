@@ -30,7 +30,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/aes"
 	"unsafe"
 )
 import "encoding/binary"
@@ -359,15 +358,11 @@ func CompileProgramToByteCode(prog []byte, bc *ByteCode) {
 
 type ScratchPad [ScratchpadSize]byte
 
-func (pad *ScratchPad) Init(seed *[64]byte) {
-	// calculate and fill scratchpad
-	clear(pad[:])
-	aes.FillAes1Rx4(seed, pad[:])
-}
 func (pad *ScratchPad) Store64(addr uint32, val uint64) {
 	*(*uint64)(unsafe.Pointer(&pad[addr])) = val
 	//binary.LittleEndian.PutUint64(pad[addr:], val)
 }
+
 func (pad *ScratchPad) Load64(addr uint32) uint64 {
 	return *(*uint64)(unsafe.Pointer(&pad[addr]))
 }

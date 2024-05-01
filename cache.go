@@ -23,10 +23,10 @@ type Cache struct {
 
 	JitPrograms [RANDOMX_PROGRAM_COUNT]SuperScalarProgramFunc
 
-	Flags uint64
+	Flags Flag
 }
 
-func NewCache(flags uint64) *Cache {
+func NewCache(flags Flag) *Cache {
 	if flags == RANDOMX_FLAG_DEFAULT {
 		flags = RANDOMX_FLAG_JIT
 	}

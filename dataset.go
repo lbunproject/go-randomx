@@ -6,7 +6,7 @@ type Dataset interface {
 	InitDataset(startItem, itemCount uint64)
 	ReadDataset(address uint64, r *RegisterLine)
 	PrefetchDataset(address uint64)
-	Flags() uint64
+	Flags() Flag
 	Cache() *Cache
 	Memory() []RegisterLine
 }

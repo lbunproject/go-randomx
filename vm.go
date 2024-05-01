@@ -45,6 +45,8 @@ type REG struct {
 type VM struct {
 	ScratchPad ScratchPad
 
+	AES aes.AES
+
 	Dataset Dataset
 
 	program    ByteCode
@@ -55,6 +57,15 @@ func NewVM(dataset Dataset) *VM {
 	vm := &VM{
 		Dataset: dataset,
 	}
+
+	if dataset.Flags()&RANDOMX_FLAG_HARD_AES > 0 {
+		vm.AES = aes.NewHardAES()
+	}
+	// fallback
+	if vm.AES == nil {
+		vm.AES = aes.NewSoftAES()
+	}
+
 	if dataset.Cache().HasJIT() {
 		vm.jitProgram = mapProgram(nil, int(RandomXCodeSize))
 		if dataset.Flags()&RANDOMX_FLAG_SECURE == 0 {
@@ -74,7 +85,7 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
 	// buffer first 128 bytes are entropy below rest are program bytes
 	var buffer [16*8 + RANDOMX_PROGRAM_SIZE*8]byte
-	aes.FillAes4Rx4(inputHash, buffer[:])
+	vm.AES.FillAes4Rx4(inputHash, buffer[:])
 
 	entropy := (*[16]uint64)(unsafe.Pointer(&buffer))
 
@@ -202,7 +213,8 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 }
 
 func (vm *VM) initScratchpad(seed *[64]byte) {
-	vm.ScratchPad.Init(seed)
+	clear(vm.ScratchPad[:])
+	vm.AES.FillAes1Rx4(seed, vm.ScratchPad[:])
 }
 
 func (vm *VM) runLoops(tempHash [64]byte) RegisterFile {
@@ -243,7 +255,7 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	reg := vm.runLoops(tempHash)
 
 	// now hash the scratch pad as it will act as register A
-	aes.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
+	vm.AES.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
 
 	regMem := reg.Memory()
 	// write hash onto register A
