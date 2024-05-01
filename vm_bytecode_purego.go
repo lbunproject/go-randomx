@@ -125,3 +125,7 @@ const lockThreadDueToRoundingMode = false
 func SetRoundingMode(f *RegisterFile, mode uint8) {
 	f.FPRC = mode
 }
+
+func ResetRoundingMode(f *RegisterFile) {
+	f.FPRC = 0
+}

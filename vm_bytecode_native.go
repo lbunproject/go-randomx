@@ -130,3 +130,8 @@ func SetRoundingMode(f *RegisterFile, mode uint8) {
 	f.FPRC = mode
 	asm.SetRoundingMode(mode)
 }
+
+func ResetRoundingMode(f *RegisterFile) {
+	f.FPRC = 0
+	asm.SetRoundingMode(uint8(0))
+}

@@ -43,7 +43,14 @@ type REG struct {
 }
 
 type VM struct {
-	ScratchPad ScratchPad
+	pad ScratchPad
+
+	// buffer first 128 bytes are entropy below rest are program bytes
+	buffer [16*8 + RANDOMX_PROGRAM_SIZE*8]byte
+
+	hashState [blake2b.Size]byte
+
+	registerFile RegisterFile
 
 	AES aes.AES
 
@@ -79,18 +86,19 @@ func NewVM(dataset Dataset) *VM {
 // Warning: Underlying callers will run float64 SetRoundingMode directly
 // It is the caller's responsibility to set and restore the mode to IEEE 754 roundTiesToEven between full executions
 // Additionally, runtime.LockOSThread and defer runtime.UnlockOSThread is recommended to prevent other goroutines sharing these changes
-func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
-
-	reg.FPRC = roundingMode
+func (vm *VM) run() {
 
 	// buffer first 128 bytes are entropy below rest are program bytes
-	var buffer [16*8 + RANDOMX_PROGRAM_SIZE*8]byte
-	vm.AES.FillAes4Rx4(inputHash, buffer[:])
+	vm.AES.FillAes4Rx4(vm.hashState, vm.buffer[:])
 
-	entropy := (*[16]uint64)(unsafe.Pointer(&buffer))
+	entropy := (*[16]uint64)(unsafe.Pointer(&vm.buffer))
 
 	// do more initialization before we run
 
+	reg := &vm.registerFile
+	reg.Clear()
+
+	// initialize constant registers
 	for i := range entropy[:8] {
 		reg.A[i/2][i%2] = SmallPositiveFloatBits(entropy[i])
 	}
@@ -113,7 +121,7 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
 	eMask := [2]uint64{ExponentMask(entropy[14]), ExponentMask(entropy[15])}
 
-	prog := buffer[len(entropy)*8:]
+	prog := vm.buffer[len(entropy)*8:]
 	CompileProgramToByteCode(prog, &vm.program)
 
 	datasetMemory := vm.Dataset.Memory()
@@ -139,8 +147,8 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
 			}
 
-			vm.jitProgram.ExecuteFull(&reg, &vm.ScratchPad, &datasetMemory[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
-			return reg
+			vm.jitProgram.ExecuteFull(reg, &vm.pad, &datasetMemory[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
+			return
 		}
 	}
 
@@ -157,15 +165,15 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 
 		//TODO: optimize these loads!
 		for i := uint64(0); i < RegistersCount; i++ {
-			reg.R[i] ^= vm.ScratchPad.Load64(uint32(spAddr0 + 8*i))
+			reg.R[i] ^= vm.pad.Load64(uint32(spAddr0 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			reg.F[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*i))
+			reg.F[i] = vm.pad.Load32FA(uint32(spAddr1 + 8*i))
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
-			reg.E[i] = vm.ScratchPad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
+			reg.E[i] = vm.pad.Load32FA(uint32(spAddr1 + 8*(i+RegistersCountFloat)))
 
 			reg.E[i][LOW] = MaskRegisterExponentMantissa(reg.E[i][LOW], eMask[LOW])
 			reg.E[i][HIGH] = MaskRegisterExponentMantissa(reg.E[i][HIGH], eMask[HIGH])
@@ -174,9 +182,9 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 		// run the actual bytecode
 		if jitProgram != nil {
 			// light mode
-			jitProgram.Execute(&reg, &vm.ScratchPad, eMask)
+			jitProgram.Execute(reg, &vm.pad, eMask)
 		} else {
-			vm.program.Execute(&reg, &vm.ScratchPad, eMask)
+			vm.program.Execute(reg, &vm.pad, eMask)
 		}
 
 		mx ^= uint32(reg.R[readReg[2]] ^ reg.R[readReg[3]])
@@ -190,80 +198,69 @@ func (vm *VM) run(inputHash [64]byte, roundingMode uint8) (reg RegisterFile) {
 		mx, ma = ma, mx
 
 		for i := uint64(0); i < RegistersCount; i++ {
-			vm.ScratchPad.Store64(uint32(spAddr1+8*i), reg.R[i])
+			vm.pad.Store64(uint32(spAddr1+8*i), reg.R[i])
 		}
 
 		for i := uint64(0); i < RegistersCountFloat; i++ {
 			reg.F[i][LOW] = Xor(reg.F[i][LOW], reg.E[i][LOW])
 			reg.F[i][HIGH] = Xor(reg.F[i][HIGH], reg.E[i][HIGH])
 
-			vm.ScratchPad.Store64(uint32(spAddr0+16*i), math.Float64bits(reg.F[i][LOW]))
-			vm.ScratchPad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(reg.F[i][HIGH]))
+			vm.pad.Store64(uint32(spAddr0+16*i), math.Float64bits(reg.F[i][LOW]))
+			vm.pad.Store64(uint32(spAddr0+16*i+8), math.Float64bits(reg.F[i][HIGH]))
 		}
 
 		spAddr0 = 0
 		spAddr1 = 0
 
 	}
-
-	runtime.KeepAlive(buffer)
-
-	return reg
-
 }
 
 func (vm *VM) initScratchpad(seed *[64]byte) {
-	clear(vm.ScratchPad[:])
-	vm.AES.FillAes1Rx4(seed, vm.ScratchPad[:])
+	clear(vm.pad[:])
+	vm.AES.FillAes1Rx4(seed, vm.pad[:])
 }
 
-func (vm *VM) runLoops(tempHash [64]byte) RegisterFile {
+func (vm *VM) runLoops() {
 	if lockThreadDueToRoundingMode {
 		// Lock thread due to rounding mode flags
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 	}
 
-	roundingMode := uint8(0)
+	// always force a restore
+	ResetRoundingMode(&vm.registerFile)
 
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
-		reg := vm.run(tempHash, roundingMode)
-		roundingMode = reg.FPRC
+		vm.run()
 
 		// write R, F, E, A registers
-		tempHash = blake2b.Sum512(reg.Memory()[:])
-		runtime.KeepAlive(reg)
+		vm.hashState = blake2b.Sum512(vm.registerFile.Memory()[:])
 	}
 
 	// final loop executes here
-	reg := vm.run(tempHash, roundingMode)
-	// always force a restore
-	reg.FPRC = 0xff
+	vm.run()
 
-	// restore rounding mode to 0
-	SetRoundingMode(&reg, 0)
-
-	return reg
+	// restore rounding mode
+	ResetRoundingMode(&vm.registerFile)
 }
 
 // CalculateHash Not thread safe.
 func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
-	tempHash := blake2b.Sum512(input)
+	vm.hashState = blake2b.Sum512(input)
 
-	vm.initScratchpad(&tempHash)
+	vm.initScratchpad(&vm.hashState)
 
-	reg := vm.runLoops(tempHash)
+	vm.runLoops()
 
 	// now hash the scratch pad as it will act as register A
-	vm.AES.HashAes1Rx4(vm.ScratchPad[:], &tempHash)
+	vm.AES.HashAes1Rx4(vm.pad[:], &vm.hashState)
 
-	regMem := reg.Memory()
+	regMem := vm.registerFile.Memory()
 	// write hash onto register A
-	copy(regMem[RegisterFileSize-RegistersCountFloat*2*8:], tempHash[:])
+	copy(regMem[RegisterFileSize-RegistersCountFloat*2*8:], vm.hashState[:])
 
 	// write R, F, E, A registers
 	*output = blake2b.Sum256(regMem[:])
-	runtime.KeepAlive(reg)
 }
 
 func (vm *VM) Close() error {

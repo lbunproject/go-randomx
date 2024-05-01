@@ -24,3 +24,6 @@ const RegisterFileSize = RegistersCount*8 + RegistersCountFloat*2*8*3
 func (rf *RegisterFile) Memory() *[RegisterFileSize]byte {
 	return (*[RegisterFileSize]byte)(unsafe.Pointer(rf))
 }
+func (rf *RegisterFile) Clear() {
+	clear(rf.Memory()[:])
+}
