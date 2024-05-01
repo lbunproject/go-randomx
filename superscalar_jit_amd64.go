@@ -41,7 +41,7 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgra
 			program = append(program, REX_LEA...)
 			program = append(program,
 				byte(0x04+8*dst),
-				genSIB(int(instr.Imm32), src, dst),
+				genSIB(int(instr.Imm32), int(src), int(dst)),
 			)
 		case S_IMUL_R:
 			program = append(program, REX_IMUL_RR...)

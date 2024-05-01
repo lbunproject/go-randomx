@@ -30,6 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
+	"errors"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/aes"
 	"math"
 	"runtime"
@@ -37,13 +38,10 @@ import (
 )
 import "golang.org/x/crypto/blake2b"
 
-type REG struct {
-	Hi uint64
-	Lo uint64
-}
-
 type VM struct {
 	pad ScratchPad
+
+	flags Flags
 
 	// buffer first 128 bytes are entropy below rest are program bytes
 	buffer [16*8 + RANDOMX_PROGRAM_SIZE*8]byte
@@ -54,18 +52,52 @@ type VM struct {
 
 	AES aes.AES
 
-	Dataset Dataset
+	Cache   *Cache
+	Dataset *Dataset
 
 	program    ByteCode
 	jitProgram VMProgramFunc
 }
 
-func NewVM(dataset Dataset) *VM {
-	vm := &VM{
-		Dataset: dataset,
+// NewVM  Creates and initializes a RandomX virtual machine.
+// *
+// * @param flags is any combination of these 5 flags (each flag can be set or not set):
+// *        RANDOMX_FLAG_LARGE_PAGES - allocate scratchpad memory in large pages
+// *        RANDOMX_FLAG_HARD_AES - virtual machine will use hardware accelerated AES
+// *        RANDOMX_FLAG_FULL_MEM - virtual machine will use the full dataset
+// *        RANDOMX_FLAG_JIT - virtual machine will use a JIT compiler
+// *        RANDOMX_FLAG_SECURE - when combined with RANDOMX_FLAG_JIT, the JIT pages are never
+// *                              writable and executable at the same time (W^X policy)
+// *        The numeric values of the first 4 flags are ordered so that a higher value will provide
+// *        faster hash calculation and a lower numeric value will provide higher portability.
+// *        Using RANDOMX_FLAG_DEFAULT (all flags not set) works on all platforms, but is the slowest.
+// * @param cache is a pointer to an initialized randomx_cache structure. Can be
+// *        NULL if RANDOMX_FLAG_FULL_MEM is set.
+// * @param dataset is a pointer to a randomx_dataset structure. Can be NULL
+// *        if RANDOMX_FLAG_FULL_MEM is not set.
+// *
+// * @return Pointer to an initialized randomx_vm structure.
+// *         Returns NULL if:
+// *         (1) Scratchpad memory allocation fails.
+// *         (2) The requested initialization flags are not supported on the current platform.
+// *         (3) cache parameter is NULL and RANDOMX_FLAG_FULL_MEM is not set
+// *         (4) dataset parameter is NULL and RANDOMX_FLAG_FULL_MEM is set
+// */
+func NewVM(flags Flags, cache *Cache, dataset *Dataset) (*VM, error) {
+	if cache == nil && !flags.Has(RANDOMX_FLAG_FULL_MEM) {
+		return nil, errors.New("nil cache in light mode")
+	}
+	if dataset == nil && flags.Has(RANDOMX_FLAG_FULL_MEM) {
+		return nil, errors.New("nil dataset in full mode")
 	}
 
-	if dataset.Flags()&RANDOMX_FLAG_HARD_AES > 0 {
+	vm := &VM{
+		Cache:   cache,
+		Dataset: dataset,
+		flags:   flags,
+	}
+
+	if flags.Has(RANDOMX_FLAG_HARD_AES) {
 		vm.AES = aes.NewHardAES()
 	}
 	// fallback
@@ -73,13 +105,14 @@ func NewVM(dataset Dataset) *VM {
 		vm.AES = aes.NewSoftAES()
 	}
 
-	if dataset.Cache().HasJIT() {
+	if flags.HasJIT() {
 		vm.jitProgram = mapProgram(nil, int(RandomXCodeSize))
-		if dataset.Flags()&RANDOMX_FLAG_SECURE == 0 {
+		if !flags.Has(RANDOMX_FLAG_SECURE) {
 			mapProgramRWX(vm.jitProgram)
 		}
 	}
-	return vm
+
+	return vm, nil
 }
 
 // run calculate hash based on input. Not thread safe.
@@ -124,13 +157,11 @@ func (vm *VM) run() {
 	prog := vm.buffer[len(entropy)*8:]
 	CompileProgramToByteCode(prog, &vm.program)
 
-	datasetMemory := vm.Dataset.Memory()
-
 	var jitProgram VMProgramFunc
 
 	if vm.jitProgram != nil {
-		if datasetMemory == nil {
-			if vm.Dataset.Flags()&RANDOMX_FLAG_SECURE > 0 {
+		if vm.Dataset == nil { //light mode
+			if vm.flags.Has(RANDOMX_FLAG_SECURE) {
 				mapProgramRW(vm.jitProgram)
 				jitProgram = vm.program.generateCode(vm.jitProgram, nil)
 				mapProgramRX(vm.jitProgram)
@@ -139,7 +170,7 @@ func (vm *VM) run() {
 			}
 		} else {
 			// full mode and we have JIT
-			if vm.Dataset.Flags()&RANDOMX_FLAG_SECURE > 0 {
+			if vm.flags.Has(RANDOMX_FLAG_SECURE) {
 				mapProgramRW(vm.jitProgram)
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
 				mapProgramRX(vm.jitProgram)
@@ -147,13 +178,15 @@ func (vm *VM) run() {
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
 			}
 
-			vm.jitProgram.ExecuteFull(reg, &vm.pad, &datasetMemory[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
+			vm.jitProgram.ExecuteFull(reg, &vm.pad, &vm.Dataset.Memory()[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
 			return
 		}
 	}
 
 	spAddr0 := uint64(mx)
 	spAddr1 := uint64(ma)
+
+	var rlCache RegisterLine
 
 	for ic := 0; ic < RANDOMX_PROGRAM_ITERATIONS; ic++ {
 		spMix := reg.R[readReg[0]] ^ reg.R[readReg[1]]
@@ -190,9 +223,19 @@ func (vm *VM) run() {
 		mx ^= uint32(reg.R[readReg[2]] ^ reg.R[readReg[3]])
 		mx &= uint32(CacheLineAlignMask)
 
-		vm.Dataset.PrefetchDataset(datasetOffset + uint64(mx))
-		// execute / load output from diffuser superscalar program to get dataset 64 bytes
-		vm.Dataset.ReadDataset(datasetOffset+uint64(ma), &reg.R)
+		if vm.Dataset != nil {
+			// full mode
+			vm.Dataset.prefetchDataset(datasetOffset + uint64(mx))
+			// load output from superscalar program to get dataset 64 bytes
+			vm.Dataset.readDataset(datasetOffset+uint64(ma), &reg.R)
+		} else {
+			// light mode
+			// execute output from superscalar program to get dataset 64 bytes
+			vm.Cache.initDataset(&rlCache, (datasetOffset+uint64(ma))/CacheLineSize)
+			for i := range reg.R {
+				reg.R[i] ^= rlCache[i]
+			}
+		}
 
 		// swap the elements
 		mx, ma = ma, mx
@@ -244,8 +287,29 @@ func (vm *VM) runLoops() {
 	ResetRoundingMode(&vm.registerFile)
 }
 
-// CalculateHash Not thread safe.
-func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
+// SetCache Reinitializes a virtual machine with a new Cache.
+// This function should be called anytime the Cache is reinitialized with a new key.
+// Does nothing if called with a Cache containing the same key value as already set.
+// VM must be initialized without RANDOMX_FLAG_FULL_MEM.
+func (vm *VM) SetCache(cache *Cache) {
+	if vm.flags.Has(RANDOMX_FLAG_FULL_MEM) {
+		panic("unsupported")
+	}
+	vm.Cache = cache
+	//todo
+}
+
+// SetDataset Reinitializes a virtual machine with a new Dataset.
+// VM must be initialized with RANDOMX_FLAG_FULL_MEM.
+func (vm *VM) SetDataset(dataset *Dataset) {
+	if !vm.flags.Has(RANDOMX_FLAG_FULL_MEM) {
+		panic("unsupported")
+	}
+	vm.Dataset = dataset
+}
+
+// CalculateHash Calculates a RandomX hash value.
+func (vm *VM) CalculateHash(input []byte, output *[RANDOMX_HASH_SIZE]byte) {
 	vm.hashState = blake2b.Sum512(input)
 
 	vm.initScratchpad(&vm.hashState)
@@ -263,6 +327,7 @@ func (vm *VM) CalculateHash(input []byte, output *[32]byte) {
 	*output = blake2b.Sum256(regMem[:])
 }
 
+// Close Releases all memory occupied by the structure.
 func (vm *VM) Close() error {
 	if vm.jitProgram != nil {
 		return vm.jitProgram.Close()

@@ -24,7 +24,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -51,7 +51,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -tags disable_jit -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -tags disable_jit -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -78,7 +78,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -105,7 +105,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -132,7 +132,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -158,7 +158,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -184,7 +184,7 @@ steps:
     commands:
       - apk update
       - apk add --no-cache git
-      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker
@@ -211,5 +211,5 @@ steps:
       - apk update
       - apk add --no-cache git bash
       - apk add --no-cache wasmtime --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing
-      - PATH=$PATH:$(go env GOROOT)/misc/wasm go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -v .
+      - PATH=$PATH:$(go env GOROOT)/misc/wasm go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ...

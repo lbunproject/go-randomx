@@ -28,9 +28,13 @@ For the C++ implementation and design of RandomX, see [github.com/tevador/Random
 |     VM Execution      | **native** | **native+jit** |  soft  | **native** |  soft  |  soft  |  soft   |  soft  |
 
 
-A pure Golang implementation can be used on platforms without hard float support or via the `purego` build flag manually.
+A pure Golang implementation can be used on platforms without hard float support or via the `purego` build tag manually.
+
+[TinyGo](https://github.com/tinygo-org/tinygo) is supported under the `purego` build tag.
 
 Any platform with no hard float support or when enabled manually will use soft float, using [softfloat64](https://git.gammaspectra.live/P2Pool/softfloat64). This will be very slow.
+
+Full mode is NOT recommended in 32-bit systems and is unsupported, although depending on system it might be able to run. You might want to manually run `runtime.GC()` if cleaning up dataset to free memory.
 
 Native hard float can be added with supporting rounding mode under _asm_.
 

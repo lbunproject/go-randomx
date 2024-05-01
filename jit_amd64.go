@@ -7,6 +7,8 @@ import (
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/asm"
 )
 
+const supportsJIT = true
+
 /*
 
 	REGISTER ALLOCATION:

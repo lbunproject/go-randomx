@@ -30,33 +30,77 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"fmt"
+	"encoding/hex"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/aes"
 	"os"
 	"runtime"
 	"slices"
+	"strings"
 )
 import "testing"
 
-var Tests = []struct {
-	key      []byte // key
-	input    []byte // input
-	expected string // expected result
-}{
-	{[]byte("RandomX example key\x00"), []byte("RandomX example input\x00"), "8a48e5f9db45ab79d9080574c4d81954fe6ac63842214aff73c244b26330b7c9"},
-	{[]byte("test key 000"), []byte("This is a test"), "639183aae1bf4c9a35884cb46b09cad9175f04efd7684e7262a0ac1c2f0b4e3f"},                                                    // test a
-	{[]byte("test key 000"), []byte("Lorem ipsum dolor sit amet"), "300a0adb47603dedb42228ccb2b211104f4da45af709cd7547cd049e9489c969"},                                        // test b
-	{[]byte("test key 000"), []byte("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"), "c36d4ed4191e617309867ed66a443be4075014e2b061bcdaf9ce7b721d2b77a8"}, // test c
-	{[]byte("test key 001"), []byte("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"), "e9ff4503201c0c2cca26d285c93ae883f9b1d30c9eb240b820756f2d5a7905fc"}, // test d
+type testdata struct {
+	name  string
+	key   []byte
+	input []byte
+	// expected result, in hex
+	expected string
+}
+
+func mustHex(str string) []byte {
+	b, err := hex.DecodeString(str)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+var Tests = []testdata{
+	{"example", []byte("RandomX example key\x00"), []byte("RandomX example input\x00"), "8a48e5f9db45ab79d9080574c4d81954fe6ac63842214aff73c244b26330b7c9"},
+	{"test_a", []byte("test key 000"), []byte("This is a test"), "639183aae1bf4c9a35884cb46b09cad9175f04efd7684e7262a0ac1c2f0b4e3f"},
+	{"test_b", []byte("test key 000"), []byte("Lorem ipsum dolor sit amet"), "300a0adb47603dedb42228ccb2b211104f4da45af709cd7547cd049e9489c969"},
+	{"test_c", []byte("test key 000"), []byte("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"), "c36d4ed4191e617309867ed66a443be4075014e2b061bcdaf9ce7b721d2b77a8"},
+	{"test_d", []byte("test key 001"), []byte("sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"), "e9ff4503201c0c2cca26d285c93ae883f9b1d30c9eb240b820756f2d5a7905fc"},
+	{"test_e", []byte("test key 001"), mustHex("0b0b98bea7e805e0010a2126d287a2a0cc833d312cb786385a7c2f9de69d25537f584a9bc9977b00000000666fd8753bf61a8631f12984e3fd44f4014eca629276817b56f32e9b68bd82f416"), "c56414121acda1713c2f2a819d8ae38aed7c80c35c2a769298d34f03833cd5f1"},
+}
+
+func testFlags(name string, flags Flags) (f Flags, skip bool) {
+	flags |= GetFlags()
+
+	nn := strings.Split(name, "/")
+	switch nn[len(nn)-1] {
+	case "interpreter":
+		flags &^= RANDOMX_FLAG_JIT
+	case "compiler":
+		flags |= RANDOMX_FLAG_JIT
+		if !flags.HasJIT() {
+			return flags, true
+		}
+
+	case "softaes":
+		flags &^= RANDOMX_FLAG_HARD_AES
+	case "hardaes":
+		flags |= RANDOMX_FLAG_HARD_AES
+		if aes.NewHardAES() == nil {
+			return flags, true
+		}
+	}
+
+	return flags, false
 }
 
 func Test_RandomXLight(t *testing.T) {
+	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes"} {
+		t.Run(n, func(t *testing.T) {
+			tFlags, skip := testFlags(t.Name(), 0)
+			if skip {
+				t.Skip("not supported on this platform")
+			}
 
-	c := NewCache(0)
-
-	for ix, tt := range Tests {
-
-		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
-			c.Init(tt.key)
+			c := NewCache(tFlags)
+			if c == nil {
+				t.Fatal("nil cache")
+			}
 			defer func() {
 				err := c.Close()
 				if err != nil {
@@ -64,34 +108,60 @@ func Test_RandomXLight(t *testing.T) {
 				}
 			}()
 
-			dataset := NewLightDataset(c)
-			dataset.InitDataset(0, DatasetItemCount)
+			for _, test := range Tests {
+				t.Run(test.name, func(t *testing.T) {
+					c.Init(test.key)
 
-			vm := NewVM(dataset)
-			defer vm.Close()
+					vm, err := NewVM(tFlags, c, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						err := vm.Close()
+						if err != nil {
+							t.Error(err)
+						}
+					}()
 
-			var output_hash [32]byte
-			vm.CalculateHash(tt.input, &output_hash)
+					var outputHash [RANDOMX_HASH_SIZE]byte
 
-			actual := fmt.Sprintf("%x", output_hash)
-			if actual != tt.expected {
-				t.Errorf("#%d Fib(%v): expected %s, actual %s", ix, tt.key, tt.expected, actual)
+					vm.CalculateHash(test.input, &outputHash)
+
+					outputHex := hex.EncodeToString(outputHash[:])
+
+					if outputHex != test.expected {
+						t.Errorf("key=%v, input=%v", test.key, test.input)
+						t.Errorf("expected=%s, actual=%s", test.expected, outputHex)
+						t.FailNow()
+					}
+				})
 			}
+
 		})
 	}
 }
 
 func Test_RandomXFull(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping full mode with -short")
+	}
+
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping full mode in CI environment")
 	}
 
-	c := NewCache(0)
+	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes"} {
+		t.Run(n, func(t *testing.T) {
 
-	for ix, tt := range Tests {
+			tFlags, skip := testFlags(t.Name(), RANDOMX_FLAG_FULL_MEM)
+			if skip {
+				t.Skip("not supported on this platform")
+			}
 
-		t.Run(string(tt.key)+"_____"+string(tt.input), func(t *testing.T) {
-			c.Init(tt.key)
+			c := NewCache(tFlags)
+			if c == nil {
+				t.Fatal("nil cache")
+			}
 			defer func() {
 				err := c.Close()
 				if err != nil {
@@ -99,44 +169,79 @@ func Test_RandomXFull(t *testing.T) {
 				}
 			}()
 
-			dataset := NewFullDataset(c)
-			if dataset == nil {
-				t.Skip("Skipping full mode in 32-bit environment")
+			dataset, err := NewDataset(tFlags)
+			if err != nil {
+				t.Fatal(err)
 			}
-			InitDatasetParallel(dataset, runtime.NumCPU())
+			defer func() {
+				err := dataset.Close()
+				if err != nil {
+					t.Error(err)
+				}
+			}()
 
-			vm := NewVM(dataset)
-			defer vm.Close()
+			for _, test := range Tests {
+				t.Run(test.name, func(t *testing.T) {
+					c.Init(test.key)
+					dataset.InitDatasetParallel(c, runtime.NumCPU())
 
-			var output_hash [32]byte
-			vm.CalculateHash(tt.input, &output_hash)
+					vm, err := NewVM(tFlags, nil, dataset)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						err := vm.Close()
+						if err != nil {
+							t.Error(err)
+						}
+					}()
 
-			actual := fmt.Sprintf("%x", output_hash)
-			if actual != tt.expected {
-				t.Errorf("#%d Fib(%v): expected %s, actual %s", ix, tt.key, tt.expected, actual)
+					var outputHash [RANDOMX_HASH_SIZE]byte
+
+					vm.CalculateHash(test.input, &outputHash)
+
+					outputHex := hex.EncodeToString(outputHash[:])
+
+					if outputHex != test.expected {
+						t.Errorf("key=%v, input=%v", test.key, test.input)
+						t.Errorf("expected=%s, actual=%s", test.expected, outputHex)
+						t.FailNow()
+					}
+				})
+
+				// cleanup between runs
+				runtime.GC()
 			}
+
 		})
 
-		// cleanup 2GiB between runs
+		// cleanup 2 GiB between runs
 		runtime.GC()
 	}
 }
 
 var BenchmarkTest = Tests[0]
 var BenchmarkCache *Cache
-var BenchmarkDatasetLight *DatasetLight
-var BenchmarkDatasetFull *DatasetFull
+var BenchmarkDataset *Dataset
+
+var BenchmarkFlags = GetFlags()
 
 func TestMain(m *testing.M) {
 	if slices.Contains(os.Args, "-test.bench") {
+		flags := GetFlags()
+		flags |= RANDOMX_FLAG_FULL_MEM
+		var err error
 		//init light and full dataset
-		BenchmarkCache = NewCache(0)
-		BenchmarkCache.Init(BenchmarkTest.key)
-		BenchmarkDatasetLight = NewLightDataset(BenchmarkCache)
-		BenchmarkDatasetLight.InitDataset(0, DatasetItemCount)
-		BenchmarkDatasetFull = NewFullDataset(BenchmarkCache)
-		InitDatasetParallel(BenchmarkDatasetFull, runtime.NumCPU())
+		BenchmarkCache = NewCache(flags)
 		defer BenchmarkCache.Close()
+		BenchmarkCache.Init(BenchmarkTest.key)
+
+		BenchmarkDataset, err = NewDataset(flags | RANDOMX_FLAG_FULL_MEM)
+		if err != nil {
+			panic(err)
+		}
+		defer BenchmarkDataset.Close()
+		BenchmarkDataset.InitDatasetParallel(BenchmarkCache, runtime.NumCPU())
 	}
 	os.Exit(m.Run())
 }
@@ -144,7 +249,10 @@ func TestMain(m *testing.M) {
 func Benchmark_RandomXLight(b *testing.B) {
 	b.ReportAllocs()
 
-	vm := NewVM(BenchmarkDatasetLight)
+	vm, err := NewVM(BenchmarkFlags, BenchmarkCache, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
 	defer vm.Close()
 
 	b.ResetTimer()
@@ -158,7 +266,10 @@ func Benchmark_RandomXLight(b *testing.B) {
 func Benchmark_RandomXFull(b *testing.B) {
 	b.ReportAllocs()
 
-	vm := NewVM(BenchmarkDatasetFull)
+	vm, err := NewVM(BenchmarkFlags|RANDOMX_FLAG_FULL_MEM, nil, BenchmarkDataset)
+	if err != nil {
+		b.Fatal(err)
+	}
 	defer vm.Close()
 
 	b.ResetTimer()
@@ -176,7 +287,10 @@ func Benchmark_RandomXLight_Parallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var output_hash [32]byte
 
-		vm := NewVM(BenchmarkDatasetLight)
+		vm, err := NewVM(BenchmarkFlags, BenchmarkCache, nil)
+		if err != nil {
+			b.Fatal(err)
+		}
 		defer vm.Close()
 
 		for pb.Next() {
@@ -193,7 +307,10 @@ func Benchmark_RandomXFull_Parallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var output_hash [32]byte
 
-		vm := NewVM(BenchmarkDatasetFull)
+		vm, err := NewVM(BenchmarkFlags|RANDOMX_FLAG_FULL_MEM, nil, BenchmarkDataset)
+		if err != nil {
+			b.Fatal(err)
+		}
 		defer vm.Close()
 
 		for pb.Next() {

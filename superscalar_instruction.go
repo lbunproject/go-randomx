@@ -5,8 +5,8 @@ import "git.gammaspectra.live/P2Pool/go-randomx/v3/internal/blake2"
 // SuperScalarInstruction superscalar program is built with superscalar instructions
 type SuperScalarInstruction struct {
 	Opcode           byte
-	Dst              int
-	Src              int
+	Dst              uint8
+	Src              uint8
 	Mod              byte
 	Imm32            uint32
 	Imm64            uint64

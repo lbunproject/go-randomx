@@ -2,4 +2,6 @@
 
 package randomx
 
+const supportsJIT = false
+
 var RandomXCodeSize uint64 = 0

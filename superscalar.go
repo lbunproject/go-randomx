@@ -300,11 +300,11 @@ func FetchNextDecoder(ins *Instruction, cycle int, mulcount int, gen *blake2.Gen
 
 type SuperScalarProgram []SuperScalarInstruction
 
-func (p SuperScalarProgram) setAddressRegister(addressRegister int) {
+func (p SuperScalarProgram) setAddressRegister(addressRegister uint8) {
 	p[0].Dst = addressRegister
 }
 
-func (p SuperScalarProgram) AddressRegister() int {
+func (p SuperScalarProgram) AddressRegister() uint8 {
 	return p[0].Dst
 }
 func (p SuperScalarProgram) Program() []SuperScalarInstruction {
@@ -474,7 +474,7 @@ func BuildSuperScalarProgram(gen *blake2.Generator) SuperScalarProgram {
 	}
 
 	// Set AddressRegister hack
-	program.setAddressRegister(address_reg)
+	program.setAddressRegister(uint8(address_reg))
 
 	return program
 }
@@ -555,18 +555,18 @@ const RegisterNeedsDisplacement = 5
 const RegisterNeedsSib = 4
 
 func (sins *SuperScalarInstruction) SelectSource(cycle int, registers *[8]Register, gen *blake2.Generator) bool {
-	availableRegisters := make([]int, 0, 8)
+	availableRegisters := make([]uint8, 0, 8)
 
 	for i := range registers {
 		if registers[i].Latency <= cycle {
-			availableRegisters = append(availableRegisters, i)
+			availableRegisters = append(availableRegisters, uint8(i))
 		}
 	}
 
 	if len(availableRegisters) == 2 && sins.Opcode == S_IADD_RS {
 		if availableRegisters[0] == RegisterNeedsDisplacement || availableRegisters[1] == RegisterNeedsDisplacement {
 			sins.Src = RegisterNeedsDisplacement
-			sins.OpGroupPar = sins.Src
+			sins.OpGroupPar = int(sins.Src)
 			return true
 		}
 	}
@@ -576,7 +576,7 @@ func (sins *SuperScalarInstruction) SelectSource(cycle int, registers *[8]Regist
 		if sins.GroupParIsSource == 0 {
 
 		} else {
-			sins.OpGroupPar = sins.Src
+			sins.OpGroupPar = int(sins.Src)
 		}
 		return true
 	}
@@ -584,21 +584,21 @@ func (sins *SuperScalarInstruction) SelectSource(cycle int, registers *[8]Regist
 }
 
 func (sins *SuperScalarInstruction) SelectDestination(cycle int, allowChainedMul bool, Registers *[8]Register, gen *blake2.Generator) bool {
-	var availableRegisters = make([]int, 0, 8)
+	var availableRegisters = make([]uint8, 0, 8)
 
 	for i := range Registers {
-		if Registers[i].Latency <= cycle && (sins.CanReuse || i != sins.Src) &&
+		if Registers[i].Latency <= cycle && (sins.CanReuse || uint8(i) != sins.Src) &&
 			(allowChainedMul || sins.OpGroup != S_IMUL_R || Registers[i].LastOpGroup != S_IMUL_R) &&
 			(Registers[i].LastOpGroup != sins.OpGroup || Registers[i].LastOpPar != sins.OpGroupPar) &&
 			(sins.Opcode != S_IADD_RS || i != RegisterNeedsDisplacement) {
-			availableRegisters = append(availableRegisters, i)
+			availableRegisters = append(availableRegisters, uint8(i))
 		}
 	}
 
 	return selectRegister(availableRegisters, gen, &sins.Dst)
 }
 
-func selectRegister(availableRegisters []int, gen *blake2.Generator, reg *int) bool {
+func selectRegister(availableRegisters []uint8, gen *blake2.Generator, reg *uint8) bool {
 	index := 0
 	if len(availableRegisters) == 0 {
 		return false
@@ -617,6 +617,7 @@ func selectRegister(availableRegisters []int, gen *blake2.Generator, reg *int) b
 
 // executeSuperscalar execute the superscalar program
 func executeSuperscalar(p []SuperScalarInstruction, r *RegisterLine) {
+	//TODO: produce around (14 * 8 * 8) = 896 different opcodes with hardcoded registers
 
 	for i := range p {
 		ins := &p[i]

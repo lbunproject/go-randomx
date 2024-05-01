@@ -81,6 +81,8 @@ const RANDOMX_JUMP_BITS = 8
 // Jump condition mask offset in bits. The sum of RANDOMX_JUMP_BITS and RANDOMX_JUMP_OFFSET must not exceed 16.
 const RANDOMX_JUMP_OFFSET = 8
 
+const RANDOMX_HASH_SIZE = 32
+
 const DatasetExtraItems = RANDOMX_DATASET_EXTRA_SIZE / RANDOMX_DATASET_ITEM_SIZE
 
 const SuperscalarMaxSize = 3*RANDOMX_SUPERSCALAR_LATENCY + 2
