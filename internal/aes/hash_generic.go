@@ -3,7 +3,7 @@
 package aes
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/keys"
 	"unsafe"
 )
 

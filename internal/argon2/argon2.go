@@ -23,7 +23,7 @@ func initBlocks(h0 *[blake2b.Size + 8]byte, memory, threads uint32) []Block
 func processBlocks(B []Block, time, memory, threads uint32, mode int)
 
 // BuildBlocks From golang.org/x/crypto/argon2.deriveKey without last deriveKey call
-func BuildBlocks(password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []Block {
+func BuildBlocks(password, salt []byte, time, memory uint32, threads uint8) []Block {
 	if time < 1 {
 		panic("argon2: number of rounds too small")
 	}
@@ -31,7 +31,8 @@ func BuildBlocks(password, salt, secret, data []byte, time, memory uint32, threa
 		panic("argon2: parallelism degree too low")
 	}
 	const mode = 0 /* argon2d */
-	h0 := initHash(password, salt, secret, data, time, memory, uint32(threads), keyLen, mode)
+	const keyLen = 0
+	h0 := initHash(password, salt, nil, nil, time, memory, uint32(threads), keyLen, mode)
 
 	memory = memory / (syncPoints * uint32(threads)) * (syncPoints * uint32(threads))
 	if memory < 2*syncPoints*uint32(threads) {

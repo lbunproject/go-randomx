@@ -3,7 +3,7 @@
 package aes
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/asm"
 )
 
 func aesroundtrip_decenc(states *[4][4]uint32, keys *[4][4]uint32) {

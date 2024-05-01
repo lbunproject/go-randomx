@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package randomx
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/blake2"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/blake2"
 	"math/bits"
 )
 

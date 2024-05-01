@@ -30,7 +30,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package aes
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/keys"
 	"unsafe"
 )
 

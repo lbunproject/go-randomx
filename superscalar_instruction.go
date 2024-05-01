@@ -1,6 +1,6 @@
 package randomx
 
-import "git.gammaspectra.live/P2Pool/go-randomx/v3/blake2"
+import "git.gammaspectra.live/P2Pool/go-randomx/v3/internal/blake2"
 
 // SuperScalarInstruction superscalar program is built with superscalar instructions
 type SuperScalarInstruction struct {

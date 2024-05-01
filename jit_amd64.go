@@ -4,7 +4,7 @@ package randomx
 
 import (
 	"encoding/binary"
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/asm"
 )
 
 /*

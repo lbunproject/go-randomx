@@ -3,8 +3,8 @@
 package aes
 
 import (
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/asm"
-	"git.gammaspectra.live/P2Pool/go-randomx/v3/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/asm"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/keys"
 	"golang.org/x/sys/cpu"
 	"unsafe"
 )
