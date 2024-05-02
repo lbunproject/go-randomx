@@ -23,7 +23,7 @@ func NewHardAES() AES {
 	return nil
 }
 
-func (h hardAES) HashAes1Rx4(input []byte, output *[64]byte) {
+func (aes hardAES) HashAes1Rx4(input []byte, output *[64]byte) {
 	if len(input)%len(output) != 0 {
 		panic("unsupported")
 	}
@@ -31,7 +31,7 @@ func (h hardAES) HashAes1Rx4(input []byte, output *[64]byte) {
 	asm.HashAes1Rx4(&keys.AesHash1R_State, &keys.AesHash1R_XKeys, output, unsafe.SliceData(input), uint64(len(input)))
 }
 
-func (h hardAES) FillAes1Rx4(state *[64]byte, output []byte) {
+func (aes hardAES) FillAes1Rx4(state *[64]byte, output []byte) {
 	if len(output)%len(state) != 0 {
 		panic("unsupported")
 	}
@@ -42,7 +42,7 @@ func (h hardAES) FillAes1Rx4(state *[64]byte, output []byte) {
 	runtime.KeepAlive(state)
 }
 
-func (h hardAES) FillAes4Rx4(state [64]byte, output []byte) {
+func (aes hardAES) FillAes4Rx4(state [64]byte, output []byte) {
 	if len(output)%len(state) != 0 {
 		panic("unsupported")
 	}
@@ -60,4 +60,10 @@ func (h hardAES) FillAes4Rx4(state [64]byte, output []byte) {
 
 		copy(output[outptr:], state[:])
 	}
+}
+
+func (aes hardAES) HashAndFillAes1Rx4(scratchpad []byte, output *[64]byte, fillState *[64]byte) {
+	//TODO
+	aes.HashAes1Rx4(scratchpad, output)
+	aes.FillAes1Rx4(fillState, scratchpad)
 }

@@ -327,6 +327,46 @@ func (vm *VM) CalculateHash(input []byte, output *[RANDOMX_HASH_SIZE]byte) {
 	*output = blake2b.Sum256(regMem[:])
 }
 
+// CalculateHashFirst will begin a hash calculation.
+func (vm *VM) CalculateHashFirst(input []byte) {
+	vm.hashState = blake2b.Sum512(input)
+
+	vm.initScratchpad(&vm.hashState)
+}
+
+// CalculateHashNext will output the hash value of the previous input and begin the calculation of the next hash.
+func (vm *VM) CalculateHashNext(nextInput []byte, output *[RANDOMX_HASH_SIZE]byte) {
+	vm.runLoops()
+
+	// now hash the scratch pad as it will act as register A
+	vm.AES.HashAes1Rx4(vm.pad[:], &vm.hashState)
+
+	// Finish current hash and fill the scratchpad for the next hash at the same time
+	regMem := vm.registerFile.Memory()
+	vm.hashState = blake2b.Sum512(nextInput)
+	// write hash onto register A
+	vm.AES.HashAndFillAes1Rx4(vm.pad[:], (*[64]byte)(unsafe.Pointer(unsafe.SliceData(regMem[RegisterFileSize-RegistersCountFloat*2*8:]))), &vm.hashState)
+	runtime.KeepAlive(regMem)
+
+	// write R, F, E, A registers
+	*output = blake2b.Sum256(regMem[:])
+}
+
+// CalculateHashLast will output the hash value of the previous input.
+func (vm *VM) CalculateHashLast(output *[RANDOMX_HASH_SIZE]byte) {
+	vm.runLoops()
+
+	// now hash the scratch pad as it will act as register A
+	vm.AES.HashAes1Rx4(vm.pad[:], &vm.hashState)
+
+	regMem := vm.registerFile.Memory()
+	// write hash onto register A
+	copy(regMem[RegisterFileSize-RegistersCountFloat*2*8:], vm.hashState[:])
+
+	// write R, F, E, A registers
+	*output = blake2b.Sum256(regMem[:])
+}
+
 // Close Releases all memory occupied by the structure.
 func (vm *VM) Close() error {
 	if vm.jitProgram != nil {

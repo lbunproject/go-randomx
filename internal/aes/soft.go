@@ -67,3 +67,9 @@ func (aes softAES) FillAes4Rx4(state [64]byte, output []byte) {
 		copy(output[outptr:], state[:])
 	}
 }
+
+func (aes softAES) HashAndFillAes1Rx4(scratchpad []byte, output *[64]byte, fillState *[64]byte) {
+	//TODO
+	aes.HashAes1Rx4(scratchpad, output)
+	aes.FillAes1Rx4(fillState, scratchpad)
+}

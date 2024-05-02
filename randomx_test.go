@@ -143,6 +143,60 @@ func Test_RandomXLight(t *testing.T) {
 	}
 }
 
+func Test_RandomXBatch(t *testing.T) {
+	t.Parallel()
+	for _, n := range []string{"softaes", "hardaes"} {
+		t.Run(n, func(t *testing.T) {
+			t.Parallel()
+			tFlags, skip := testFlags(t.Name(), 0)
+			if skip {
+				t.Skip("not supported on this platform")
+			}
+
+			c := NewCache(tFlags)
+			if c == nil {
+				t.Fatal("nil cache")
+			}
+			defer func() {
+				err := c.Close()
+				if err != nil {
+					t.Error(err)
+				}
+			}()
+			tests := Tests[1:4]
+
+			c.Init(tests[0].key)
+			vm, err := NewVM(tFlags, c, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				err := vm.Close()
+				if err != nil {
+					t.Error(err)
+				}
+			}()
+
+			var outputHash [3][RANDOMX_HASH_SIZE]byte
+
+			vm.CalculateHashFirst(tests[0].input)
+			vm.CalculateHashNext(tests[1].input, &outputHash[0])
+			vm.CalculateHashNext(tests[2].input, &outputHash[1])
+			vm.CalculateHashLast(&outputHash[2])
+
+			for i, test := range tests {
+				outputHex := hex.EncodeToString(outputHash[i][:])
+
+				if outputHex != test.expected {
+					t.Errorf("key=%v, input=%v", test.key, test.input)
+					t.Errorf("expected=%s, actual=%s", test.expected, outputHex)
+					t.FailNow()
+				}
+			}
+		})
+	}
+}
+
 func Test_RandomXFull(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping full mode with -short")

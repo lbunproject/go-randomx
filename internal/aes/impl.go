@@ -28,6 +28,9 @@ type AES interface {
 	// calls to this function.
 	FillAes1Rx4(state *[64]byte, output []byte)
 
+	// HashAndFillAes1Rx4 Hashes and fills scratchpad and output in one sweep
+	HashAndFillAes1Rx4(scratchpad []byte, output *[64]byte, fillState *[64]byte)
+
 	// FillAes4Rx4 used to generate final program
 	//
 	// 'state' is copied when calling
