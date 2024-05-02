@@ -90,8 +90,10 @@ func testFlags(name string, flags Flags) (f Flags, skip bool) {
 }
 
 func Test_RandomXLight(t *testing.T) {
+	t.Parallel()
 	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes"} {
 		t.Run(n, func(t *testing.T) {
+			t.Parallel()
 			tFlags, skip := testFlags(t.Name(), 0)
 			if skip {
 				t.Skip("not supported on this platform")

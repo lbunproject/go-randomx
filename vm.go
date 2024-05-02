@@ -270,8 +270,11 @@ func (vm *VM) runLoops() {
 		defer runtime.UnlockOSThread()
 	}
 
-	// always force a restore
+	// always force a restore before startup
 	ResetRoundingMode(&vm.registerFile)
+
+	// restore rounding mode at the end
+	defer ResetRoundingMode(&vm.registerFile)
 
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
 		vm.run()
@@ -282,9 +285,6 @@ func (vm *VM) runLoops() {
 
 	// final loop executes here
 	vm.run()
-
-	// restore rounding mode
-	ResetRoundingMode(&vm.registerFile)
 }
 
 // SetCache Reinitializes a virtual machine with a new Cache.
