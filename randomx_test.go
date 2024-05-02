@@ -31,7 +31,9 @@ package randomx
 
 import (
 	"encoding/hex"
+	"errors"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/aes"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
 	"os"
 	"runtime"
 	"slices"
@@ -66,6 +68,7 @@ var Tests = []testdata{
 
 func testFlags(name string, flags Flags) (f Flags, skip bool) {
 	flags |= GetFlags()
+	flags &^= RANDOMX_FLAG_LARGE_PAGES
 
 	nn := strings.Split(name, "/")
 	switch nn[len(nn)-1] {
@@ -84,6 +87,11 @@ func testFlags(name string, flags Flags) (f Flags, skip bool) {
 		if aes.NewHardAES() == nil {
 			return flags, true
 		}
+	case "largepages":
+		flags |= RANDOMX_FLAG_LARGE_PAGES
+		if largePageAllocator == nil {
+			return flags, true
+		}
 	}
 
 	return flags, false
@@ -91,7 +99,7 @@ func testFlags(name string, flags Flags) (f Flags, skip bool) {
 
 func Test_RandomXLight(t *testing.T) {
 	t.Parallel()
-	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes"} {
+	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes", "largepages"} {
 		t.Run(n, func(t *testing.T) {
 			t.Parallel()
 			tFlags, skip := testFlags(t.Name(), 0)
@@ -99,9 +107,12 @@ func Test_RandomXLight(t *testing.T) {
 				t.Skip("not supported on this platform")
 			}
 
-			c := NewCache(tFlags)
-			if c == nil {
-				t.Fatal("nil cache")
+			c, err := NewCache(tFlags)
+			if err != nil {
+				if tFlags.Has(RANDOMX_FLAG_LARGE_PAGES) && errors.Is(err, memory.PageNoMemoryErr) {
+					t.Skip("cannot allocate memory")
+				}
+				t.Fatal(err)
 			}
 			defer func() {
 				err := c.Close()
@@ -153,9 +164,12 @@ func Test_RandomXBatch(t *testing.T) {
 				t.Skip("not supported on this platform")
 			}
 
-			c := NewCache(tFlags)
-			if c == nil {
-				t.Fatal("nil cache")
+			c, err := NewCache(tFlags)
+			if tFlags.Has(RANDOMX_FLAG_LARGE_PAGES) && errors.Is(err, memory.PageNoMemoryErr) {
+				t.Skip("cannot allocate memory")
+			}
+			if err != nil {
+				t.Fatal(err)
 			}
 			defer func() {
 				err := c.Close()
@@ -206,7 +220,7 @@ func Test_RandomXFull(t *testing.T) {
 		t.Skip("Skipping full mode in CI environment")
 	}
 
-	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes"} {
+	for _, n := range []string{"interpreter", "compiler", "softaes", "hardaes", "largepages"} {
 		t.Run(n, func(t *testing.T) {
 
 			tFlags, skip := testFlags(t.Name(), RANDOMX_FLAG_FULL_MEM)
@@ -214,9 +228,12 @@ func Test_RandomXFull(t *testing.T) {
 				t.Skip("not supported on this platform")
 			}
 
-			c := NewCache(tFlags)
-			if c == nil {
-				t.Fatal("nil cache")
+			c, err := NewCache(tFlags)
+			if tFlags.Has(RANDOMX_FLAG_LARGE_PAGES) && errors.Is(err, memory.PageNoMemoryErr) {
+				t.Skip("cannot allocate memory")
+			}
+			if err != nil {
+				t.Fatal(err)
 			}
 			defer func() {
 				err := c.Close()
@@ -288,13 +305,22 @@ func TestMain(m *testing.M) {
 		flags |= RANDOMX_FLAG_FULL_MEM
 		var err error
 		//init light and full dataset
-		BenchmarkCache = NewCache(flags)
+		BenchmarkCache, err = NewCache(flags | RANDOMX_FLAG_LARGE_PAGES)
+		if err != nil {
+			BenchmarkCache, err = NewCache(flags)
+			if err != nil {
+				panic(err)
+			}
+		}
 		defer BenchmarkCache.Close()
 		BenchmarkCache.Init(BenchmarkTest.key)
 
-		BenchmarkDataset, err = NewDataset(flags | RANDOMX_FLAG_FULL_MEM)
+		BenchmarkDataset, err = NewDataset(flags | RANDOMX_FLAG_FULL_MEM | RANDOMX_FLAG_LARGE_PAGES)
 		if err != nil {
-			panic(err)
+			BenchmarkDataset, err = NewDataset(flags | RANDOMX_FLAG_FULL_MEM)
+			if err != nil {
+				panic(err)
+			}
 		}
 		defer BenchmarkDataset.Close()
 		BenchmarkDataset.InitDatasetParallel(BenchmarkCache, runtime.NumCPU())

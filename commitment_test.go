@@ -8,7 +8,10 @@ import (
 func Test_CalculateCommitment(t *testing.T) {
 	t.Parallel()
 
-	cache := NewCache(GetFlags())
+	cache, err := NewCache(GetFlags())
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer cache.Close()
 
 	test := Tests[1]

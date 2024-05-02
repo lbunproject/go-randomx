@@ -32,6 +32,7 @@ package randomx
 import (
 	"errors"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/aes"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
 	"math"
 	"runtime"
 	"unsafe"
@@ -91,6 +92,17 @@ func NewVM(flags Flags, cache *Cache, dataset *Dataset) (*VM, error) {
 		return nil, errors.New("nil dataset in full mode")
 	}
 
+	pad, err := memory.Allocate[ScratchPad](cacheLineAlignedAllocator)
+	if err != nil {
+		return nil, err
+	}
+	registerFile, err := memory.Allocate[RegisterFile](cacheLineAlignedAllocator)
+	if err != nil {
+		return nil, err
+	}
+	_ = pad
+	_ = registerFile
+
 	vm := &VM{
 		Cache:        cache,
 		Dataset:      dataset,
@@ -98,9 +110,6 @@ func NewVM(flags Flags, cache *Cache, dataset *Dataset) (*VM, error) {
 		pad:          new(ScratchPad),
 		registerFile: new(RegisterFile),
 	}
-
-	assertAlignedTo16(uintptr(unsafe.Pointer(vm.pad)))
-	assertAlignedTo16(uintptr(unsafe.Pointer(vm.registerFile)))
 
 	if flags.Has(RANDOMX_FLAG_HARD_AES) {
 		vm.AES = aes.NewHardAES()
@@ -111,9 +120,17 @@ func NewVM(flags Flags, cache *Cache, dataset *Dataset) (*VM, error) {
 	}
 
 	if flags.HasJIT() {
-		vm.jitProgram = mapProgram(nil, int(RandomXCodeSize))
+		vm.jitProgram, err = memory.AllocateSlice[byte](pageAllocator, int(RandomXCodeSize))
+		if err != nil {
+			return nil, err
+		}
+
 		if !flags.Has(RANDOMX_FLAG_SECURE) {
-			mapProgramRWX(vm.jitProgram)
+			err = memory.PageReadWriteExecute(vm.jitProgram)
+			if err != nil {
+				vm.jitProgram.Close()
+				return nil, err
+			}
 		}
 	}
 
@@ -167,18 +184,30 @@ func (vm *VM) run() {
 	if vm.jitProgram != nil {
 		if vm.Dataset == nil { //light mode
 			if vm.flags.Has(RANDOMX_FLAG_SECURE) {
-				mapProgramRW(vm.jitProgram)
+				err := memory.PageReadWrite(vm.jitProgram)
+				if err != nil {
+					panic(err)
+				}
 				jitProgram = vm.program.generateCode(vm.jitProgram, nil)
-				mapProgramRX(vm.jitProgram)
+				err = memory.PageReadExecute(vm.jitProgram)
+				if err != nil {
+					panic(err)
+				}
 			} else {
 				jitProgram = vm.program.generateCode(vm.jitProgram, nil)
 			}
 		} else {
 			// full mode and we have JIT
 			if vm.flags.Has(RANDOMX_FLAG_SECURE) {
-				mapProgramRW(vm.jitProgram)
+				err := memory.PageReadWrite(vm.jitProgram)
+				if err != nil {
+					panic(err)
+				}
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
-				mapProgramRX(vm.jitProgram)
+				err = memory.PageReadExecute(vm.jitProgram)
+				if err != nil {
+					panic(err)
+				}
 			} else {
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
 			}
@@ -374,6 +403,9 @@ func (vm *VM) CalculateHashLast(output *[RANDOMX_HASH_SIZE]byte) {
 
 // Close Releases all memory occupied by the structure.
 func (vm *VM) Close() error {
+	memory.Free(cacheLineAlignedAllocator, vm.pad)
+	memory.Free(cacheLineAlignedAllocator, vm.registerFile)
+
 	if vm.jitProgram != nil {
 		return vm.jitProgram.Close()
 	}

@@ -19,7 +19,7 @@ func (f Flags) HasJIT() bool {
 const RANDOMX_FLAG_DEFAULT Flags = 0
 
 const (
-	// RANDOMX_FLAG_LARGE_PAGES not implemented
+	// RANDOMX_FLAG_LARGE_PAGES Select large page allocation for dataset
 	RANDOMX_FLAG_LARGE_PAGES = Flags(1 << iota)
 	// RANDOMX_FLAG_HARD_AES Selects between hardware or software AES
 	RANDOMX_FLAG_HARD_AES

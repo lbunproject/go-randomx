@@ -2,8 +2,8 @@ package randomx
 
 import (
 	"errors"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
 	"sync"
-	"unsafe"
 )
 
 const DatasetSize = RANDOMX_DATASET_BASE_SIZE + RANDOMX_DATASET_EXTRA_SIZE
@@ -12,6 +12,7 @@ const DatasetItemCount = DatasetSize / CacheLineSize
 
 type Dataset struct {
 	memory []RegisterLine
+	flags  Flags
 }
 
 // NewDataset Creates a randomx_dataset structure and allocates memory for RandomX Dataset.
@@ -30,14 +31,27 @@ func NewDataset(flags Flags) (result *Dataset, err error) {
 		}
 	}()
 
-	//todo: implement large pages, align allocation
-	alignedMemory := make([]RegisterLine, DatasetItemCount)
-	assertAlignedTo16(uintptr(unsafe.Pointer(unsafe.SliceData(alignedMemory))))
+	var alignedMemory []RegisterLine
 
-	//todo: err on not large pages
+	if flags.Has(RANDOMX_FLAG_LARGE_PAGES) {
+		if largePageAllocator == nil {
+			return nil, errors.New("huge pages not supported")
+		}
+		alignedMemory, err = memory.AllocateSlice[RegisterLine](largePageAllocator, DatasetItemCount)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		alignedMemory, err = memory.AllocateSlice[RegisterLine](cacheLineAlignedAllocator, DatasetItemCount)
+
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &Dataset{
 		memory: alignedMemory,
+		flags:  flags,
 	}, nil
 }
 
@@ -70,7 +84,11 @@ func (d *Dataset) InitDataset(cache *Cache, startItem, itemCount uint64) {
 }
 
 func (d *Dataset) Close() error {
-	return nil
+	if d.flags.Has(RANDOMX_FLAG_LARGE_PAGES) {
+		return memory.FreeSlice(largePageAllocator, d.memory)
+	} else {
+		return memory.FreeSlice(cacheLineAlignedAllocator, d.memory)
+	}
 }
 
 func (d *Dataset) InitDatasetParallel(cache *Cache, n int) {

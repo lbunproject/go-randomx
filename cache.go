@@ -1,15 +1,16 @@
 package randomx
 
 import (
+	"errors"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/argon2"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/blake2"
 	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/keys"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
 	"runtime"
-	"slices"
 	"unsafe"
 )
 
-type MemoryBlock [128]uint64
+type MemoryBlock [argon2.BlockSize / 8]uint64
 
 func (m *MemoryBlock) GetLine(addr uint64) *RegisterLine {
 	addr >>= 3
@@ -17,7 +18,7 @@ func (m *MemoryBlock) GetLine(addr uint64) *RegisterLine {
 }
 
 type Cache struct {
-	blocks []MemoryBlock
+	blocks *[RANDOMX_ARGON_MEMORY]MemoryBlock
 
 	programs [RANDOMX_PROGRAM_COUNT]SuperScalarProgram
 
@@ -44,10 +45,30 @@ type Cache struct {
 // *         (2) the RANDOMX_FLAG_JIT is set and JIT compilation is not supported on the current platform
 // *         (3) an invalid or unsupported RANDOMX_FLAG_ARGON2 value is set
 // */
-func NewCache(flags Flags) *Cache {
-	return &Cache{
-		flags: flags,
+func NewCache(flags Flags) (c *Cache, err error) {
+
+	var blocks *[RANDOMX_ARGON_MEMORY]MemoryBlock
+
+	if flags.Has(RANDOMX_FLAG_LARGE_PAGES) {
+		if largePageAllocator == nil {
+			return nil, errors.New("huge pages not supported")
+		}
+		blocks, err = memory.Allocate[[RANDOMX_ARGON_MEMORY]MemoryBlock](largePageAllocator)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		blocks, err = memory.Allocate[[RANDOMX_ARGON_MEMORY]MemoryBlock](cacheLineAlignedAllocator)
+
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	return &Cache{
+		flags:  flags,
+		blocks: blocks,
+	}, nil
 }
 
 func (c *Cache) hasInitializedJIT() bool {
@@ -64,24 +85,26 @@ func (c *Cache) Close() error {
 			}
 		}
 	}
-	return nil
+
+	if c.flags.Has(RANDOMX_FLAG_LARGE_PAGES) {
+		return memory.Free(largePageAllocator, c.blocks)
+	} else {
+		return memory.Free(cacheLineAlignedAllocator, c.blocks)
+	}
 }
 
 // Init Initializes the cache memory and SuperscalarHash using the provided key value.
 // Does nothing if called again with the same key value.
 func (c *Cache) Init(key []byte) {
+	//TODO: cache key and do not regenerate
 
-	kkey := slices.Clone(key)
+	argonBlocks := unsafe.Slice((*argon2.Block)(unsafe.Pointer(c.blocks)), len(c.blocks))
 
-	argonBlocks := argon2.BuildBlocks(kkey, []byte(RANDOMX_ARGON_SALT), RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES)
-
-	memoryBlocks := unsafe.Slice((*MemoryBlock)(unsafe.Pointer(unsafe.SliceData(argonBlocks))), int(unsafe.Sizeof(argon2.Block{}))/int(unsafe.Sizeof(MemoryBlock{}))*len(argonBlocks))
-
-	c.blocks = memoryBlocks
+	argon2.BuildBlocks(argonBlocks, key, []byte(RANDOMX_ARGON_SALT), RANDOMX_ARGON_ITERATIONS, RANDOMX_ARGON_MEMORY, RANDOMX_ARGON_LANES)
 
 	const nonce uint32 = 0
 
-	gen := blake2.New(kkey, nonce)
+	gen := blake2.New(key, nonce)
 	for i := range c.programs {
 		// build a superscalar program
 		prog := BuildSuperScalarProgram(gen)
@@ -90,6 +113,8 @@ func (c *Cache) Init(key []byte) {
 			c.jitPrograms[i] = generateSuperscalarCode(prog)
 			// fallback if can't compile program
 			if c.jitPrograms[i] == nil {
+				c.programs[i] = prog
+			} else if err := memory.PageReadExecute(c.jitPrograms[i]); err != nil {
 				c.programs[i] = prog
 			} else {
 				c.programs[i] = SuperScalarProgram{prog[0]}
@@ -112,7 +137,7 @@ func (c *Cache) getMixBlock(addr uint64) *RegisterLine {
 	return c.blocks[block].GetLine(addr % 1024)
 }
 
-func (c *Cache) GetMemory() []MemoryBlock {
+func (c *Cache) GetMemory() *[RANDOMX_ARGON_MEMORY]MemoryBlock {
 	return c.blocks
 }
 

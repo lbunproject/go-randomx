@@ -4,6 +4,7 @@ package randomx
 
 import (
 	"encoding/binary"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
 	"unsafe"
 )
 
@@ -90,5 +91,11 @@ func generateSuperscalarCode(scalarProgram SuperScalarProgram) SuperScalarProgra
 
 	program = append(program, RET)
 
-	return mapProgram(program, len(program))
+	pagedMemory, err := memory.AllocateSlice[byte](pageAllocator, len(program))
+	if err != nil {
+		return nil
+	}
+	copy(pagedMemory, program)
+
+	return pagedMemory
 }

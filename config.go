@@ -29,7 +29,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package randomx
 
-import "git.gammaspectra.live/P2Pool/go-randomx/v3/internal/argon2"
+import (
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/argon2"
+	"git.gammaspectra.live/P2Pool/go-randomx/v3/internal/memory"
+)
 
 // see reference configuration.h
 // Cache size in KiB. Must be a power of 2.
@@ -111,3 +114,7 @@ const STOREL3CONDITION = 14
 func isZeroOrPowerOf2(x uint32) bool {
 	return (x & (x - 1)) == 0
 }
+
+var largePageAllocator = memory.NewLargePageAllocator()
+var pageAllocator = memory.NewPageAllocator()
+var cacheLineAlignedAllocator = memory.NewAlignedAllocator(CacheLineSize)

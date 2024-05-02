@@ -5,7 +5,11 @@ import "testing"
 func Test_Cache_Init(t *testing.T) {
 	t.Parallel()
 
-	cache := NewCache(GetFlags())
+	cache, err := NewCache(GetFlags())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cache.Close()
 	cache.Init(Tests[1].key)
 
 	memory := cache.GetMemory()
@@ -47,7 +51,11 @@ func Test_Cache_InitDataset(t *testing.T) {
 		flags := GetFlags()
 		flags &^= RANDOMX_FLAG_JIT
 
-		cache := NewCache(flags)
+		cache, err := NewCache(flags)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cache.Close()
 		cache.Init(Tests[1].key)
 
 		var datasetItem RegisterLine
@@ -70,7 +78,11 @@ func Test_Cache_InitDataset(t *testing.T) {
 			t.Skip("not supported on this platform")
 		}
 
-		cache := NewCache(flags)
+		cache, err := NewCache(flags)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cache.Close()
 		cache.Init(Tests[1].key)
 		if !cache.hasInitializedJIT() {
 			t.Skip("not supported on this platform")
