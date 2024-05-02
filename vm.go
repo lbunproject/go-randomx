@@ -39,7 +39,7 @@ import (
 import "golang.org/x/crypto/blake2b"
 
 type VM struct {
-	pad ScratchPad
+	pad *ScratchPad
 
 	flags Flags
 
@@ -48,7 +48,7 @@ type VM struct {
 
 	hashState [blake2b.Size]byte
 
-	registerFile RegisterFile
+	registerFile *RegisterFile
 
 	AES aes.AES
 
@@ -92,10 +92,15 @@ func NewVM(flags Flags, cache *Cache, dataset *Dataset) (*VM, error) {
 	}
 
 	vm := &VM{
-		Cache:   cache,
-		Dataset: dataset,
-		flags:   flags,
+		Cache:        cache,
+		Dataset:      dataset,
+		flags:        flags,
+		pad:          new(ScratchPad),
+		registerFile: new(RegisterFile),
 	}
+
+	assertAlignedTo16(uintptr(unsafe.Pointer(vm.pad)))
+	assertAlignedTo16(uintptr(unsafe.Pointer(vm.registerFile)))
 
 	if flags.Has(RANDOMX_FLAG_HARD_AES) {
 		vm.AES = aes.NewHardAES()
@@ -128,7 +133,7 @@ func (vm *VM) run() {
 
 	// do more initialization before we run
 
-	reg := &vm.registerFile
+	reg := vm.registerFile
 	reg.Clear()
 
 	// initialize constant registers
@@ -178,7 +183,7 @@ func (vm *VM) run() {
 				jitProgram = vm.program.generateCode(vm.jitProgram, &readReg)
 			}
 
-			vm.jitProgram.ExecuteFull(reg, &vm.pad, &vm.Dataset.Memory()[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
+			vm.jitProgram.ExecuteFull(reg, vm.pad, &vm.Dataset.Memory()[datasetOffset/CacheLineSize], RANDOMX_PROGRAM_ITERATIONS, ma, mx, eMask)
 			return
 		}
 	}
@@ -215,9 +220,9 @@ func (vm *VM) run() {
 		// run the actual bytecode
 		if jitProgram != nil {
 			// light mode
-			jitProgram.Execute(reg, &vm.pad, eMask)
+			jitProgram.Execute(reg, vm.pad, eMask)
 		} else {
-			vm.program.Execute(reg, &vm.pad, eMask)
+			vm.program.Execute(reg, vm.pad, eMask)
 		}
 
 		mx ^= uint32(reg.R[readReg[2]] ^ reg.R[readReg[3]])
@@ -271,10 +276,10 @@ func (vm *VM) runLoops() {
 	}
 
 	// always force a restore before startup
-	ResetRoundingMode(&vm.registerFile)
+	ResetRoundingMode(vm.registerFile)
 
 	// restore rounding mode at the end
-	defer ResetRoundingMode(&vm.registerFile)
+	defer ResetRoundingMode(vm.registerFile)
 
 	for chain := 0; chain < RANDOMX_PROGRAM_COUNT-1; chain++ {
 		vm.run()

@@ -3,6 +3,7 @@ package randomx
 import (
 	"errors"
 	"sync"
+	"unsafe"
 )
 
 const DatasetSize = RANDOMX_DATASET_BASE_SIZE + RANDOMX_DATASET_EXTRA_SIZE
@@ -31,6 +32,7 @@ func NewDataset(flags Flags) (result *Dataset, err error) {
 
 	//todo: implement large pages, align allocation
 	alignedMemory := make([]RegisterLine, DatasetItemCount)
+	assertAlignedTo16(uintptr(unsafe.Pointer(unsafe.SliceData(alignedMemory))))
 
 	//todo: err on not large pages
 

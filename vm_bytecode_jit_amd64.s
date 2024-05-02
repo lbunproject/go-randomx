@@ -19,20 +19,20 @@ TEXT ·vm_run(SB),$8-40
     MOVQ (7*8)(AX), R15
 
     // f0-f3
-    VMOVUPD (8*8)(AX), X0
-    VMOVUPD (10*8)(AX), X1
-    VMOVUPD (12*8)(AX), X2
-    VMOVUPD (14*8)(AX), X3
+    VMOVAPD (8*8)(AX), X0
+    VMOVAPD (10*8)(AX), X1
+    VMOVAPD (12*8)(AX), X2
+    VMOVAPD (14*8)(AX), X3
     // e0-e3
-    VMOVUPD (16*8)(AX), X4
-    VMOVUPD (18*8)(AX), X5
-    VMOVUPD (20*8)(AX), X6
-    VMOVUPD (22*8)(AX), X7
+    VMOVAPD (16*8)(AX), X4
+    VMOVAPD (18*8)(AX), X5
+    VMOVAPD (20*8)(AX), X6
+    VMOVAPD (22*8)(AX), X7
     // a0-a3
-    VMOVUPD (24*8)(AX), X8
-    VMOVUPD (26*8)(AX), X9
-    VMOVUPD (28*8)(AX), X10
-    VMOVUPD (30*8)(AX), X11
+    VMOVAPD (24*8)(AX), X8
+    VMOVAPD (26*8)(AX), X9
+    VMOVAPD (28*8)(AX), X10
+    VMOVAPD (30*8)(AX), X11
 
     // mantissa mask
 	//VMOVQ $0x00ffffffffffffff, $0x00ffffffffffffff, X13
@@ -62,7 +62,12 @@ TEXT ·vm_run(SB),$8-40
     // move register file back to registers
 	MOVQ rf+0(FP), AX
 
-    PREFETCHT0 0(AX)
+    // prefetchw BYTE PTR [rax]
+    // PREFETCHW 0(AX)
+    BYTE $0x0F
+    BYTE $0x0D
+    BYTE $0x08
+
     // r0-r7
     MOVQ R8, (0*8)(AX)
     MOVQ R9, (1*8)(AX)
@@ -74,15 +79,15 @@ TEXT ·vm_run(SB),$8-40
     MOVQ R15, (7*8)(AX)
 
     // f0-f3
-    VMOVUPD X0, (8*8)(AX)
-    VMOVUPD X1, (10*8)(AX)
-    VMOVUPD X2, (12*8)(AX)
-    VMOVUPD X3, (14*8)(AX)
+    VMOVAPD X0, (8*8)(AX)
+    VMOVAPD X1, (10*8)(AX)
+    VMOVAPD X2, (12*8)(AX)
+    VMOVAPD X3, (14*8)(AX)
     // e0-e3
-    VMOVUPD X4, (16*8)(AX)
-    VMOVUPD X5, (18*8)(AX)
-    VMOVUPD X6, (20*8)(AX)
-    VMOVUPD X7, (22*8)(AX)
+    VMOVAPD X4, (16*8)(AX)
+    VMOVAPD X5, (18*8)(AX)
+    VMOVAPD X6, (20*8)(AX)
+    VMOVAPD X7, (22*8)(AX)
 
     // a0-a3 are constant, no need to move
 
@@ -109,20 +114,20 @@ TEXT ·vm_run_full(SB),$32-64
     MOVQ (7*8)(AX), R15
 
     // f0-f3
-    VMOVUPD (8*8)(AX), X0
-    VMOVUPD (10*8)(AX), X1
-    VMOVUPD (12*8)(AX), X2
-    VMOVUPD (14*8)(AX), X3
+    VMOVAPD (8*8)(AX), X0
+    VMOVAPD (10*8)(AX), X1
+    VMOVAPD (12*8)(AX), X2
+    VMOVAPD (14*8)(AX), X3
     // e0-e3
-    VMOVUPD (16*8)(AX), X4
-    VMOVUPD (18*8)(AX), X5
-    VMOVUPD (20*8)(AX), X6
-    VMOVUPD (22*8)(AX), X7
+    VMOVAPD (16*8)(AX), X4
+    VMOVAPD (18*8)(AX), X5
+    VMOVAPD (20*8)(AX), X6
+    VMOVAPD (22*8)(AX), X7
     // load constants a0-a3
-    VMOVUPD (24*8)(AX), X8
-    VMOVUPD (26*8)(AX), X9
-    VMOVUPD (28*8)(AX), X10
-    VMOVUPD (30*8)(AX), X11
+    VMOVAPD (24*8)(AX), X8
+    VMOVAPD (26*8)(AX), X9
+    VMOVAPD (28*8)(AX), X10
+    VMOVAPD (30*8)(AX), X11
 
     //TODO: rest of init
 
@@ -166,7 +171,13 @@ TEXT ·vm_run_full(SB),$32-64
     // move register file back to registers
 	MOVQ rf+0(FP), AX
 
-    PREFETCHT0 0(AX)
+
+    // prefetchw BYTE PTR [rax]
+    // PREFETCHW 0(AX)
+    BYTE $0x0F
+    BYTE $0x0D
+    BYTE $0x08
+
     // r0-r7
     MOVQ R8, (0*8)(AX)
     MOVQ R9, (1*8)(AX)
@@ -178,15 +189,15 @@ TEXT ·vm_run_full(SB),$32-64
     MOVQ R15, (7*8)(AX)
 
     // f0-f3
-    VMOVUPD X0, (8*8)(AX)
-    VMOVUPD X1, (10*8)(AX)
-    VMOVUPD X2, (12*8)(AX)
-    VMOVUPD X3, (14*8)(AX)
+    VMOVAPD X0, (8*8)(AX)
+    VMOVAPD X1, (10*8)(AX)
+    VMOVAPD X2, (12*8)(AX)
+    VMOVAPD X3, (14*8)(AX)
     // e0-e3
-    VMOVUPD X4, (16*8)(AX)
-    VMOVUPD X5, (18*8)(AX)
-    VMOVUPD X6, (20*8)(AX)
-    VMOVUPD X7, (22*8)(AX)
+    VMOVAPD X4, (16*8)(AX)
+    VMOVAPD X5, (18*8)(AX)
+    VMOVAPD X6, (20*8)(AX)
+    VMOVAPD X7, (22*8)(AX)
 
     // a0-a3 are constant, no need to move
 

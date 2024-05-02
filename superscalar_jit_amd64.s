@@ -23,9 +23,11 @@ TEXT ·superscalar_run(SB),$0-16
     CALL AX
 
 
-    // todo: not supported by golang
+    // prefetchw BYTE PTR [rsi]
     // PREFETCHW 0(SI)
-    PREFETCHT0 0(SI)
+    BYTE $0x0F
+    BYTE $0x0D
+    BYTE $0x0E
 
     // move registers back to register line
     MOVQ R8, 0(SI)
