@@ -38,6 +38,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"unsafe"
 )
 import "testing"
 
@@ -90,6 +91,10 @@ func testFlags(name string, flags Flags) (f Flags, skip bool) {
 	case "largepages":
 		flags |= RANDOMX_FLAG_LARGE_PAGES
 		if largePageAllocator == nil {
+			return flags, true
+		}
+		if unsafe.Sizeof(uint(0)) < 8 {
+			//not 64-bit platforms
 			return flags, true
 		}
 	}
