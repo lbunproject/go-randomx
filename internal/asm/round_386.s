@@ -2,14 +2,20 @@
 
 #include "textflag.h"
 
-// stmxcsr reads the MXCSR control and status register.
-TEXT ·stmxcsr(SB),NOSPLIT|NOFRAME,$0-4
-	MOVL addr+0(FP), SI
-	STMXCSR (SI)
-	RET
+TEXT ·setRoundingMode(SB),NOSPLIT|NOFRAME,$4-1
+	MOVB addr+0(FP), AX
+	ANDL $3, AX
+	ROLL $13, AX
 
-// ldmxcsr writes to the MXCSR control and status register.
-TEXT ·ldmxcsr(SB),NOSPLIT|NOFRAME,$0-4
-	MOVL addr+0(FP), SI
-	LDMXCSR (SI)
+    // get current MXCSR register
+	PUSHL AX
+	STMXCSR 0(SP)
+
+	// put new rounding mode
+	ANDL $~0x6000, 0(SP)
+	ORL AX, 0(SP)
+
+	// store new MXCSR register
+	LDMXCSR 0(SP)
+	POPL AX
 	RET
