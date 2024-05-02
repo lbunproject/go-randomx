@@ -185,6 +185,61 @@ steps:
       - apk update
       - apk add --no-cache git
       - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
+      -
+---
+kind: pipeline
+type: docker
+name: go-arm-asm
+platform:
+  os: linux
+  arch: arm64
+
+environment:
+  GOPROXY: direct
+  GOARCH: arm
+  GOARM: 7
+  GOOS: linux
+  GOTRACEBACK: 2
+  GOEXPERIMENT: "cgocheck2,newinliner"
+  CGO_ENABLED: "0"
+
+workspace:
+  path: /drone/src
+
+steps:
+  - name: test
+    image: golang:1.22-alpine3.19
+    commands:
+      - apk update
+      - apk add --no-cache git
+      - go test -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
+---
+kind: pipeline
+type: docker
+name: go-arm-purego
+platform:
+  os: linux
+  arch: arm64
+
+environment:
+  GOPROXY: direct
+  GOARCH: arm
+  GOARM: 7
+  GOOS: linux
+  GOTRACEBACK: 2
+  GOEXPERIMENT: "cgocheck2,newinliner"
+  CGO_ENABLED: "0"
+
+workspace:
+  path: /drone/src
+
+steps:
+  - name: test
+    image: golang:1.22-alpine3.19
+    commands:
+      - apk update
+      - apk add --no-cache git
+      - go test -tags purego -p 1 -failfast -timeout 20m -cover -gcflags=-d=checkptr -short -v .
 ---
 kind: pipeline
 type: docker

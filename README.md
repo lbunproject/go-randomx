@@ -18,14 +18,14 @@ Supports Full mode and Light mode.
 
 For the C++ implementation and design of RandomX, see [github.com/tevador/RandomX](https://github.com/tevador/RandomX)
 
-|        Feature        |    386     |     amd64      |  arm   |   arm64    |  mips  | mips64 | riscv64 |  wasm  |
-|:---------------------:|:----------:|:--------------:|:------:|:----------:|:------:|:------:|:-------:|:------:|
-|        purego         |     ✅      |       ✅        |   ✅    |     ✅      |   ✅    |   ✅    |    ✅    |   ✅    |
-|       Full Mode       |     ❌      |       ✅        |   ❌    |     ✅      |   ❌    |   ✅    |    ✅    |   ❌    |
-|   Float Operations    |     hw     |     **hw**     |  soft  |   **hw**   |  soft  |  soft  |  soft   |  soft  |
-|    AES Operations     |    soft    |     **hw**     |  soft  |    soft    |  soft  |  soft  |  soft   |  soft  |
-| Superscalar Execution |   native   | **native+jit** | native |   native   | native | native | native  | native |
-|     VM Execution      | **native** | **native+jit** |  soft  | **native** |  soft  |  soft  |  soft   |  soft  |
+|        Feature        |     386     |    amd64     |     arm     |    arm64    |    mips     |   mips64    |   riscv64   |    wasm     |
+|:---------------------:|:-----------:|:------------:|:-----------:|:-----------:|:-----------:|:-----------:|:-----------:|:-----------:|
+|        purego         |      ✅      |      ✅       |      ✅      |      ✅      |      ✅      |      ✅      |      ✅      |      ✅      |
+|       Full Mode       |      ❌      |      ✅       |      ❌      |      ✅      |      ❌      |      ✅      |      ✅      |      ❌      |
+|   Float Operations    |   **hw**    |    **hw**    |   **hw**    |   **hw**    |    soft     |    soft     |    soft     |    soft     |
+|    AES Operations     |    soft     |    **hw**    |    soft     |    soft     |    soft     |    soft     |    soft     |    soft     |
+| Superscalar Execution | interpreter | **compiler** | interpreter | interpreter | interpreter | interpreter | interpreter | interpreter |
+|     VM Execution      | interpreter | **compiler** | interpreter | interpreter |    soft     |    soft     |    soft     |    soft     |
 
 
 A pure Golang implementation can be used on platforms without hard float support or via the `purego` build tag manually.

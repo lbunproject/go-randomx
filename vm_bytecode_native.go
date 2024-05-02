@@ -1,4 +1,4 @@
-//go:build (arm64 || amd64 || 386) && !purego
+//go:build (arm64 || arm.6 || arm.7 || amd64 || 386) && !purego
 
 package randomx
 
