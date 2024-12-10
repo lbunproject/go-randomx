@@ -1,3 +1,5 @@
+This is a mirror of: [P2Pool/go-randomx](https://git.gammaspectra.live/P2Pool/go-randomx) hosted on git.gammaspectra.live
+
 # RandomX (Golang Implementation)
 RandomX is a proof-of-work (PoW) algorithm that is optimized for general-purpose CPUs.
 RandomX uses random code execution (hence the name) together with several memory-hard techniques to minimize the efficiency advantage of specialized hardware.
